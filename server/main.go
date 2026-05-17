@@ -9,8 +9,8 @@ import (
 	"github.com/songgao/water"
 )
 
-const ipAddr = "10.0.6.1"
-const peer = "10.0.6.2"
+const ipAddr = "10.0.5.1"
+const peer = "10.0.5.2"
 var remoteAddr atomic.Pointer[net.UDPAddr] 
 
 func main() {
@@ -57,7 +57,7 @@ func main() {
 
 
 func read(tun *water.Interface, conn *net.UDPConn) {
-	buf := make([]byte, 2048)
+	buf := make([]byte, 65535)
 	for {
 		n, clientAddr, err := conn.ReadFromUDP(buf)
 		if err != nil {
@@ -74,7 +74,7 @@ func read(tun *water.Interface, conn *net.UDPConn) {
 }
 
 func write(tun *water.Interface, conn *net.UDPConn) {
-	buf := make([]byte, 2048);
+	buf := make([]byte, 65535);
 
 	for {
 		n, err := tun.Read(buf)

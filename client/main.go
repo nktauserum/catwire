@@ -52,7 +52,7 @@ func main() {
 }
 
 func read(tun *water.Interface, conn net.Conn) {
-	buf := make([]byte, 2048)
+	buf := make([]byte, 65535)
 	for {
 		n, err := tun.Read(buf)
 		if err != nil {
@@ -68,7 +68,7 @@ func read(tun *water.Interface, conn net.Conn) {
 }
 
 func write(tun *water.Interface, conn net.Conn) {
-	buf := make([]byte, 2048)
+	buf := make([]byte, 65535)
 	for {
 		n, err := conn.Read(buf)
 		if err != nil {
