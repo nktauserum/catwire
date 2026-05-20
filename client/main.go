@@ -6,6 +6,8 @@ import (
 	"net"
 
 	"github.com/songgao/water"
+
+	"github.com/nktauserum/catwire/common"
 )
 
 const (
@@ -39,11 +41,17 @@ func main() {
 		}
 	}
 
+	log.Println("Successfully created TUN interface")
+
 	conn, err := net.Dial("udp", serverUDP)
 	if err != nil {
 		log.Fatalln("error dialing to the server: ", err)
 	}
 	defer conn.Close()
+
+	log.Printf("Dialing the connection to the server on %s\n", serverUDP)
+
+	log.Printf("header size: %v\n", common.HeaderSize)
 
 	go read(tun, conn)
 	go write(tun, conn)
@@ -60,6 +68,8 @@ func read(tun *water.Interface, conn net.Conn) {
 			continue
 		}
 
+		log.Printf("read: package %v bytes\n", n)
+
 		if _, err = conn.Write(buf[:n]); err != nil {
 			log.Printf("write: %v", err)
 			continue
@@ -75,6 +85,8 @@ func write(tun *water.Interface, conn net.Conn) {
 			log.Printf("error reading from %s: %v\n", conn.RemoteAddr(), err)
 			continue
 		}
+
+		log.Printf("write: package %v bytes\n", n)
 
 		if _, err = tun.Write(buf[:n]); err != nil {
 			log.Printf("Error writing to %s: %v", tun.Name(), err)
