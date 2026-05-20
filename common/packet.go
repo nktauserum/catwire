@@ -28,7 +28,7 @@ func ReceiveNewPacket(data []byte) Packet {
 		Header: Header {
 			PacketType: 		data[0],
 			SequenceNumber: 	binary.BigEndian.Uint64(data[1:9]),
-			AdditionalData:  	binary.BigEndian.Uint64(data[10:HeaderSize]),
+			AdditionalData:  	binary.BigEndian.Uint64(data[9:HeaderSize]),
 		},
 		Payload: data[HeaderSize:],
 	}
@@ -40,7 +40,7 @@ func SendNewPacket(p Packet) []byte {
 
 	buf[0] = p.Header.PacketType
 	binary.BigEndian.PutUint64(buf[1:9], p.Header.SequenceNumber)
-	binary.BigEndian.PutUint64(buf[10:HeaderSize], p.Header.AdditionalData)
+	binary.BigEndian.PutUint64(buf[9:HeaderSize], p.Header.AdditionalData)
 	copy(buf[HeaderSize:], p.Payload)
 
 	return buf
