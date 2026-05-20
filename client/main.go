@@ -4,6 +4,7 @@ import (
 	"log"
 	"os/exec"
 	"net"
+	"sync/atomic"
 
 	"github.com/songgao/water"
 
@@ -15,6 +16,8 @@ const (
 	peer      = "10.0.5.1"
 	serverUDP = "192.168.1.2:55635"
 )
+
+var nextSequenceNumber atomic.Uint64
 
 func main() {
 	c := water.Config{
@@ -51,8 +54,6 @@ func main() {
 
 	log.Printf("Dialing the connection to the server on %s\n", serverUDP)
 
-	log.Printf("header size: %v\n", common.HeaderSize)
-
 	go read(tun, conn)
 	go write(tun, conn)
 
@@ -61,6 +62,15 @@ func main() {
 
 func read(tun *water.Interface, conn net.Conn) {
 	buf := make([]byte, 65535)
+	p := common.Packet {
+		Header: common.Header {
+			PacketType: common.DATA,	
+			SequenceNumber: 0,
+			AdditionalData: 0,
+		},
+		Payload: nil,
+	}
+
 	for {
 		n, err := tun.Read(buf)
 		if err != nil {
@@ -68,9 +78,15 @@ func read(tun *water.Interface, conn net.Conn) {
 			continue
 		}
 
-		log.Printf("read: package %v bytes\n", n)
+		p.Header.PacketType = common.DATA
+		p.Header.SequenceNumber = nextSequenceNumber.Load()
+		p.Header.AdditionalData = 0
+		p.Payload = buf[:n]
 
-		if _, err = conn.Write(buf[:n]); err != nil {
+		encodedPacket := common.SendNewPacket(p)
+		nextSequenceNumber.Add(1)
+
+		if _, err = conn.Write(encodedPacket); err != nil {
 			log.Printf("write: %v", err)
 			continue
 		}
@@ -86,9 +102,9 @@ func write(tun *water.Interface, conn net.Conn) {
 			continue
 		}
 
-		log.Printf("write: package %v bytes\n", n)
+		p := common.ReceiveNewPacket(buf[:n])
 
-		if _, err = tun.Write(buf[:n]); err != nil {
+		if _, err = tun.Write(p.Payload); err != nil {
 			log.Printf("Error writing to %s: %v", tun.Name(), err)
 			continue
 		}

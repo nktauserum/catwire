@@ -7,11 +7,14 @@ import (
 	"net"
 
 	"github.com/songgao/water"
+
+	"github.com/nktauserum/catwire/common"
 )
 
 const ipAddr = "10.0.5.1"
 const peer = "10.0.5.2"
 var remoteAddr atomic.Pointer[net.UDPAddr] 
+var nextSequenceNumber atomic.Uint64
 
 func main() {
 	c := water.Config{
@@ -67,7 +70,9 @@ func read(tun *water.Interface, conn *net.UDPConn) {
 
 		remoteAddr.Store(clientAddr)
 
-		if _, err = tun.Write(buf[:n]); err != nil {
+		p := common.ReceiveNewPacket(buf[:n])
+
+		if _, err = tun.Write(p.Payload); err != nil {
 			log.Println("read: ", err)
 		}
 	}
@@ -75,16 +80,33 @@ func read(tun *water.Interface, conn *net.UDPConn) {
 
 func write(tun *water.Interface, conn *net.UDPConn) {
 	buf := make([]byte, 65535);
+	p := common.Packet {
+		Header: common.Header {
+			PacketType: common.DATA,	
+			SequenceNumber: 0,
+			AdditionalData: 0,
+		},
+		Payload: nil,
+	}
 
 	for {
 		n, err := tun.Read(buf)
 		if err != nil {
 			log.Println("write: ", err)
 			continue
-		}
+		} 
+
+		p.Header.PacketType = common.DATA
+		p.Header.SequenceNumber = nextSequenceNumber.Load()
+		p.Header.AdditionalData = 0
+		p.Payload = buf[:n]
+
+		encodedPacket := common.SendNewPacket(p)
+		nextSequenceNumber.Add(1)
+
 
 		if clientAddr := remoteAddr.Load(); clientAddr != nil {
-			if _, err := conn.WriteToUDP(buf[:n], clientAddr); err != nil {
+			if _, err := conn.WriteToUDP(encodedPacket, clientAddr); err != nil {
 				log.Println("write: ", err)
 			}
 		}
