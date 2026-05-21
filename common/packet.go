@@ -6,17 +6,23 @@ import (
 
 const (
 	DATA uint8 = iota
-	ACK
-	NAK
+	HANDSHAKE
 )
+
+/*
+	Header - структура фиксированного размера, которая идёт в начале любого catwire-пакета. 
+	- PacketType: тип данного пакета (данные, рукопожатие)
+	- PeerIndex: присвоенный сервером номер данного пира для определения состояния
+	- Counter: номер данного пакета, применяемый для шифрования и защиты от повтора
+*/
 
 type Header struct {
 	PacketType 		uint8
-	SequenceNumber 	uint64
-	AdditionalData 	uint64
+	PeerIndex		uint16
+	Counter		 	uint64
 }
 
-const HeaderSize = 1 + 8 + 8
+const HeaderSize = 1 + 2 + 8
 
 type Packet struct {
 	Header 	Header
@@ -27,8 +33,8 @@ func ReceiveNewPacket(data []byte) Packet {
 	return Packet {
 		Header: Header {
 			PacketType: 		data[0],
-			SequenceNumber: 	binary.BigEndian.Uint64(data[1:9]),
-			AdditionalData:  	binary.BigEndian.Uint64(data[9:HeaderSize]),
+			PeerIndex:		 	binary.BigEndian.Uint16(data[1:3]),
+			Counter:		  	binary.BigEndian.Uint64(data[3:HeaderSize]),
 		},
 		Payload: data[HeaderSize:],
 	}
@@ -39,8 +45,8 @@ func SendNewPacket(p Packet) []byte {
 	buf := make([]byte, HeaderSize + len(p.Payload))
 
 	buf[0] = p.Header.PacketType
-	binary.BigEndian.PutUint64(buf[1:9], p.Header.SequenceNumber)
-	binary.BigEndian.PutUint64(buf[9:HeaderSize], p.Header.AdditionalData)
+	binary.BigEndian.PutUint16(buf[1:3], p.Header.PeerIndex)
+	binary.BigEndian.PutUint64(buf[3:HeaderSize], p.Header.Counter)
 	copy(buf[HeaderSize:], p.Payload)
 
 	return buf

@@ -65,8 +65,8 @@ func read(tun *water.Interface, conn net.Conn) {
 	p := common.Packet {
 		Header: common.Header {
 			PacketType: common.DATA,	
-			SequenceNumber: 0,
-			AdditionalData: 0,
+			PeerIndex: 0,
+			Counter: 0,
 		},
 		Payload: nil,
 	}
@@ -79,8 +79,8 @@ func read(tun *water.Interface, conn net.Conn) {
 		}
 
 		p.Header.PacketType = common.DATA
-		p.Header.SequenceNumber = nextSequenceNumber.Load()
-		p.Header.AdditionalData = 0
+		p.Header.PeerIndex = 0
+		p.Header.Counter = 0
 		p.Payload = buf[:n]
 
 		encodedPacket := common.SendNewPacket(p)
