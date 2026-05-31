@@ -89,12 +89,10 @@ func (s *Client) Start() {
 			s.s = StateTransmit
 
 		case StateTransmit: 
-			break	
+			return	
 		}
 
 	}
-
-	select {}
 }
 
 func main() {
@@ -162,6 +160,8 @@ func main() {
 	go listenTUN(tun, outgoing)
 
 	client.Start()
+
+	select {}
 }
 
 func listenTUN(tun *water.Interface, outgoing chan []byte) {
