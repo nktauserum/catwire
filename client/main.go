@@ -1,13 +1,12 @@
 package main
 
 import (
-	"log"
-	"os/exec"
-	"net"
-	"sync/atomic"
 	"crypto/ecdh"
 	"crypto/rand"
-
+	"log"
+	"net"
+	"os/exec"
+	"sync/atomic"
 
 	"github.com/songgao/water"
 
@@ -15,17 +14,93 @@ import (
 )
 
 const (
-	ipAddr    = "10.0.5.2" 
+	ipAddr    = "10.0.5.2"
 	peer      = "10.0.5.1"
 	serverUDP = "192.168.1.2:55635"
 )
 
 var nextSequenceNumber atomic.Uint64
 
+type State uint8
+
+const (
+	StateHandshakeInit State = iota
+	StateWaitHandshakeResp
+	StateHandshakeFinish
+	StateWaiting
+	StateTransmit
+)
+
+type Client struct {
+	s State
+
+	serverPublicKey *ecdh.PublicKey
+	secret          []byte
+
+	incoming 		chan common.Packet
+	outgoing        chan []byte
+
+	curve            ecdh.Curve
+	clientPrivateKey *ecdh.PrivateKey
+	clientPublicKey  *ecdh.PublicKey
+}
+
+func (s *Client) Start() {
+	for {
+		switch s.s {
+		case StateHandshakeInit:
+			p := common.Packet{
+				Header: common.Header{
+					PacketType: common.HANDSHAKE_INIT,
+					PeerIndex:  0,
+					Counter:    nextSequenceNumber.Load(),
+				},
+				Payload: s.clientPublicKey.Bytes(),
+			}
+
+			encHandshake := common.EncodePacket(p)
+
+			s.outgoing <- encHandshake
+			s.s = StateWaitHandshakeResp
+
+		case StateWaitHandshakeResp:
+			p := <-s.incoming
+
+			if p.Header.PacketType != common.HANDSHAKE_INIT {
+				continue
+			}
+
+			var err error
+
+			s.serverPublicKey, err = s.curve.NewPublicKey(p.Payload)
+			if err != nil {
+				log.Printf("error creating new public key: %v\n", err)
+				continue
+			}
+
+			s.secret, err = s.clientPrivateKey.ECDH(s.serverPublicKey)
+			if err != nil {
+				log.Printf("error computing the secret: %v\n", err)
+				continue
+			}
+
+			log.Printf("secret: %v\n", s.secret)
+			
+			s.s = StateTransmit
+
+		case StateTransmit: 
+			break	
+		}
+
+	}
+
+	select {}
+}
+
 func main() {
 	c := water.Config{
 		DeviceType: water.TUN,
-		PlatformSpecificParams: water.PlatformSpecificParams {
+		PlatformSpecificParams: water.PlatformSpecificParams{
 			Name: "cw0",
 		},
 	}
@@ -37,7 +112,7 @@ func main() {
 
 	cmds := [][]string{
 		{"ip", "link", "set", tun.Name(), "up"},
-		{"ip", "addr", "add", ipAddr+"/32", "peer", peer, "dev", tun.Name()},
+		{"ip", "addr", "add", ipAddr + "/32", "peer", peer, "dev", tun.Name()},
 	}
 
 	for _, cmd := range cmds {
@@ -50,12 +125,11 @@ func main() {
 	log.Println("Successfully created TUN interface")
 
 	curve := ecdh.X25519()
-	clientPrivate, err := curve.GenerateKey(rand.Reader)
+	clientPrivateKey, err := curve.GenerateKey(rand.Reader)
 	if err != nil {
 		log.Fatalf("error generating client private key: %v\n", err)
 	}
-	clientPublic := clientPrivate.PublicKey().Bytes()
-
+	clientPublicKey := clientPrivateKey.PublicKey()
 
 	conn, err := net.Dial("udp", serverUDP)
 	if err != nil {
@@ -68,38 +142,35 @@ func main() {
 	incoming := make(chan common.Packet)
 	outgoing := make(chan []byte)
 
+	client := Client {
+		s: StateHandshakeInit,
+
+		serverPublicKey: nil,
+		secret: nil,
+
+		outgoing: outgoing,
+		incoming: incoming,
+
+		curve: curve,
+		clientPrivateKey: clientPrivateKey,
+		clientPublicKey: clientPublicKey,
+	}
+
 	// start send loop
 	go sendUDP(outgoing, conn)
 	go listenUDP(conn, tun, incoming)
-
-
-	// init handshake
-	p := common.Packet {
-		Header: common.Header {
-			PacketType: common.HANDSHAKE_INIT,
-			PeerIndex: 0,
-			Counter: nextSequenceNumber.Load(),
-		},
-		Payload: clientPublic,
-	}
-
-	encHandshake := common.EncodePacket(p)
-
-	outgoing <- encHandshake
-	
-	// only after the handshake start other processes
 	go listenTUN(tun, outgoing)
 
-	select {}
+	client.Start()
 }
 
 func listenTUN(tun *water.Interface, outgoing chan []byte) {
 	buf := make([]byte, 65535)
-	p := common.Packet {
-		Header: common.Header {
-			PacketType: common.DATA,	
-			PeerIndex: 0,
-			Counter: 0,
+	p := common.Packet{
+		Header: common.Header{
+			PacketType: common.DATA,
+			PeerIndex:  0,
+			Counter:    0,
 		},
 		Payload: nil,
 	}
@@ -119,10 +190,9 @@ func listenTUN(tun *water.Interface, outgoing chan []byte) {
 		encodedPacket := common.EncodePacket(p)
 		nextSequenceNumber.Add(1)
 
-		outgoing <- encodedPacket 
+		outgoing <- encodedPacket
 	}
 }
-
 
 func sendUDP(outgoing chan []byte, conn net.Conn) {
 	for packet := range outgoing {
@@ -142,11 +212,11 @@ func listenUDP(conn net.Conn, tun *water.Interface, incoming chan common.Packet)
 			continue
 		}
 
-		p := common.DecodePacket(buf[:n])	
-		
+		p := common.DecodePacket(buf[:n])
+
 		if p.Header.PacketType == common.DATA {
 			if _, err = tun.Write(p.Payload); err != nil {
-				log.Printf("error writing to TUN: %v\n", err)		
+				log.Printf("error writing to TUN: %v\n", err)
 			}
 			continue
 		}
@@ -154,5 +224,3 @@ func listenUDP(conn net.Conn, tun *water.Interface, incoming chan common.Packet)
 		incoming <- p
 	}
 }
-
-
