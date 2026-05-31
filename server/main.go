@@ -103,7 +103,7 @@ func main() {
 	c := water.Config{
 		DeviceType: water.TUN,
 		PlatformSpecificParams: water.PlatformSpecificParams{
-			Name: "cw1",
+			Name: "cw0",
 		},
 	}
 
