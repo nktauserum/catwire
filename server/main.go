@@ -83,7 +83,7 @@ func main() {
 				return
 			}
 
-			log.Printf("secret: %s\n", secret)
+			log.Printf("secret: %v\n", secret)
 		}
 	}
 }
