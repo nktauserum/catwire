@@ -5,6 +5,8 @@ import (
 	"os/exec"
 	"sync/atomic"
 	"net"
+	"crypto/ecdh"
+	"crypto/rand"
 
 	"github.com/songgao/water"
 
@@ -41,6 +43,14 @@ func main() {
 		}
 	}
 
+	// init crypto
+	curve := ecdh.X25519()
+	serverPrivate, err := curve.GenerateKey(rand.Reader)
+	if err != nil {
+		log.Fatalf("error generating server private key: %v\n", err)
+	}
+	// serverPublic := serverPrivate.PublicKey().Bytes()
+
 	addr, err := net.ResolveUDPAddr("udp", ":55635")
 	if err != nil {
 		log.Fatalf("error resolving udp addr: %v\n", err)
@@ -52,14 +62,34 @@ func main() {
 	}
 	defer conn.Close()
 
-	go read(tun, conn)
-	go write(tun, conn)
+	incoming := make(chan common.Packet)
+	outgoing := make(chan []byte)
 
-	select {}
+	go sendUDP(conn, outgoing)
+	go listenUDP(tun, conn, incoming)
+	go listenTUN(tun, outgoing)
+
+	for p := range incoming {
+		if p.Header.PacketType == common.HANDSHAKE_INIT {
+			clientPublicKey, err := curve.NewPublicKey(p.Payload)
+			if err != nil {
+				log.Printf("error creating new public key: %v\n", err)
+				return
+			}
+
+			secret, err := serverPrivate.ECDH(clientPublicKey)
+			if err != nil {
+				log.Printf("error computing the secret: %v\n", err)
+				return
+			}
+
+			log.Printf("secret: %s\n", secret)
+		}
+	}
 }
 
 
-func read(tun *water.Interface, conn *net.UDPConn) {
+func listenUDP(tun *water.Interface, conn *net.UDPConn, incoming chan common.Packet) {
 	buf := make([]byte, 65535)
 	for {
 		n, clientAddr, err := conn.ReadFromUDP(buf)
@@ -70,24 +100,21 @@ func read(tun *water.Interface, conn *net.UDPConn) {
 
 		remoteAddr.Store(clientAddr)
 
-		p := common.ReceiveNewPacket(buf[:n])
+		p := common.DecodePacket(buf[:n])
 
-		if _, err = tun.Write(p.Payload); err != nil {
-			log.Println("read: ", err)
+		if p.Header.PacketType == common.DATA {
+			if _, err = tun.Write(p.Payload); err != nil {
+				log.Println("read: ", err)
+			}
+			continue
 		}
+
+		incoming <- p
 	}
 }
 
-func write(tun *water.Interface, conn *net.UDPConn) {
+func listenTUN(tun *water.Interface, outgoing chan []byte) {
 	buf := make([]byte, 65535);
-	p := common.Packet {
-		Header: common.Header {
-			PacketType: common.DATA,	
-			PeerIndex: 0,
-			Counter: 0,
-		},
-		Payload: nil,
-	}
 
 	for {
 		n, err := tun.Read(buf)
@@ -96,17 +123,26 @@ func write(tun *water.Interface, conn *net.UDPConn) {
 			continue
 		} 
 
-		p.Header.PacketType = common.DATA
-		p.Header.PeerIndex = 0
-		p.Header.Counter = 0
-		p.Payload = buf[:n]
+		p := common.Packet {
+			Header: common.Header {
+				PacketType: common.DATA,	
+				PeerIndex: 0,
+				Counter: nextSequenceNumber.Load(),
+			},
+			Payload: buf[:n],
+		}
 
-		encodedPacket := common.SendNewPacket(p)
+		encodedPacket := common.EncodePacket(p)
 		nextSequenceNumber.Add(1)
 
+		outgoing <- encodedPacket 
+	}
+}
 
+func sendUDP(conn *net.UDPConn, outgoing chan []byte) {
+	for packet := range outgoing {
 		if clientAddr := remoteAddr.Load(); clientAddr != nil {
-			if _, err := conn.WriteToUDP(encodedPacket, clientAddr); err != nil {
+			if _, err := conn.WriteToUDP(packet, clientAddr); err != nil {
 				log.Println("write: ", err)
 			}
 		}

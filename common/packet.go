@@ -6,7 +6,7 @@ import (
 
 const (
 	DATA uint8 = iota
-	HANDSHAKE
+	HANDSHAKE_INIT
 )
 
 /*
@@ -29,7 +29,7 @@ type Packet struct {
 	Payload []byte
 }
 
-func ReceiveNewPacket(data []byte) Packet {
+func DecodePacket(data []byte) Packet {
 	return Packet {
 		Header: Header {
 			PacketType: 		data[0],
@@ -40,8 +40,7 @@ func ReceiveNewPacket(data []byte) Packet {
 	}
 }
 
-func SendNewPacket(p Packet) []byte {
-	// using make just for now. then an external buffer will be used
+func EncodePacket(p Packet) []byte {
 	buf := make([]byte, HeaderSize + len(p.Payload))
 
 	buf[0] = p.Header.PacketType
