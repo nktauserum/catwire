@@ -34,11 +34,15 @@ type Session struct {
 
 	clientPublicKey *ecdh.PublicKey
 	secret          []byte
+
 	outgoing        chan []byte
+	incoming chan common.Packet
 
 	curve            ecdh.Curve
 	serverPrivateKey *ecdh.PrivateKey
 	serverPublicKey  *ecdh.PublicKey
+
+	crypto *common.Crypto
 }
 
 func (s *Session) HandlePacket(p common.Packet) error {
@@ -75,6 +79,13 @@ func (s *Session) HandlePacket(p common.Packet) error {
 
 		enc := common.EncodePacket(p)
 		s.outgoing <- enc
+
+		s.crypto, err = common.NewCrypto(s.secret)
+		if err != nil {
+			log.Printf("error creating crypto: %v\n", err)
+			return err
+		}
+
 
 		s.s = StateTransmit
 
@@ -142,22 +153,25 @@ func main() {
 		secret:          nil,
 
 		outgoing: outgoing,
+		incoming: incoming,
 
 		curve:            curve,
 		serverPrivateKey: serverPrivateKey,
 		serverPublicKey:  serverPublicKey,
+
+		crypto: nil,
 	}
 
-	go sendUDP(conn, outgoing)
-	go listenUDP(tun, conn, incoming)
-	go listenTUN(tun, outgoing)
+	go s.sendUDP(conn)
+	go s.listenUDP(tun, conn)
+	go s.listenTUN(tun)
 
 	for p := range incoming {
 		s.HandlePacket(p)
 	}
 }
 
-func listenUDP(tun *water.Interface, conn *net.UDPConn, incoming chan common.Packet) {
+func (s *Session) listenUDP(tun *water.Interface, conn *net.UDPConn) {
 	buf := make([]byte, 65535)
 	for {
 		n, clientAddr, err := conn.ReadFromUDP(buf)
@@ -167,21 +181,26 @@ func listenUDP(tun *water.Interface, conn *net.UDPConn, incoming chan common.Pac
 		}
 
 		remoteAddr.Store(clientAddr)
-
 		p := common.DecodePacket(buf[:n])
 
 		if p.Header.PacketType == common.DATA {
-			if _, err = tun.Write(p.Payload); err != nil {
+			decrypted, err := s.crypto.Decrypt(p.Payload)
+			if err != nil {
+				log.Println("listenUDP: decrypt: ", err)
+				continue
+			}
+
+			if _, err = tun.Write(decrypted); err != nil {
 				log.Println("read: ", err)
 			}
 			continue
 		}
 
-		incoming <- p
+		s.incoming <- p
 	}
 }
 
-func listenTUN(tun *water.Interface, outgoing chan []byte) {
+func (s *Session) listenTUN(tun *water.Interface) {
 	buf := make([]byte, 65535)
 
 	for {
@@ -191,24 +210,32 @@ func listenTUN(tun *water.Interface, outgoing chan []byte) {
 			continue
 		}
 
+		if s.crypto == nil { continue }
+
+		encryptedData, err := s.crypto.Encrypt(buf[:n])
+		if err != nil {
+			log.Printf("listenTUN: encrypt: %v\n", err)
+			continue
+		}
+
 		p := common.Packet{
 			Header: common.Header{
 				PacketType: common.DATA,
 				PeerIndex:  0,
 				Counter:    nextSequenceNumber.Load(),
 			},
-			Payload: buf[:n],
+			Payload: encryptedData,
 		}
 
 		encodedPacket := common.EncodePacket(p)
 		nextSequenceNumber.Add(1)
 
-		outgoing <- encodedPacket
+		s.outgoing <- encodedPacket
 	}
 }
 
-func sendUDP(conn *net.UDPConn, outgoing chan []byte) {
-	for packet := range outgoing {
+func (s *Session) sendUDP(conn *net.UDPConn) {
+	for packet := range s.outgoing {
 		if clientAddr := remoteAddr.Load(); clientAddr != nil {
 			if _, err := conn.WriteToUDP(packet, clientAddr); err != nil {
 				log.Println("write: ", err)

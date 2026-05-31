@@ -43,11 +43,13 @@ type Client struct {
 	curve            ecdh.Curve
 	clientPrivateKey *ecdh.PrivateKey
 	clientPublicKey  *ecdh.PublicKey
+
+	crypto *common.Crypto
 }
 
-func (s *Client) Start() {
+func (c *Client) Start() {
 	for {
-		switch s.s {
+		switch c.s {
 		case StateHandshakeInit:
 			p := common.Packet{
 				Header: common.Header{
@@ -55,16 +57,16 @@ func (s *Client) Start() {
 					PeerIndex:  0,
 					Counter:    nextSequenceNumber.Load(),
 				},
-				Payload: s.clientPublicKey.Bytes(),
+				Payload: c.clientPublicKey.Bytes(),
 			}
 
 			encHandshake := common.EncodePacket(p)
 
-			s.outgoing <- encHandshake
-			s.s = StateWaitHandshakeResp
+			c.outgoing <- encHandshake
+			c.s = StateWaitHandshakeResp
 
 		case StateWaitHandshakeResp:
-			p := <-s.incoming
+			p := <-c.incoming
 
 			if p.Header.PacketType != common.HANDSHAKE_INIT {
 				continue
@@ -72,21 +74,27 @@ func (s *Client) Start() {
 
 			var err error
 
-			s.serverPublicKey, err = s.curve.NewPublicKey(p.Payload)
+			c.serverPublicKey, err = c.curve.NewPublicKey(p.Payload)
 			if err != nil {
 				log.Printf("error creating new public key: %v\n", err)
 				continue
 			}
 
-			s.secret, err = s.clientPrivateKey.ECDH(s.serverPublicKey)
+			c.secret, err = c.clientPrivateKey.ECDH(c.serverPublicKey)
 			if err != nil {
 				log.Printf("error computing the secret: %v\n", err)
 				continue
 			}
 
-			log.Printf("secret: %v\n", s.secret)
+			log.Printf("secret: %v\n", c.secret)
+
+			c.crypto, err = common.NewCrypto(c.secret)
+			if err != nil {
+				log.Printf("error creating crypto: %v\n", err)
+				continue
+			}
 			
-			s.s = StateTransmit
+			c.s = StateTransmit
 
 		case StateTransmit: 
 			return	
@@ -152,28 +160,22 @@ func main() {
 		curve: curve,
 		clientPrivateKey: clientPrivateKey,
 		clientPublicKey: clientPublicKey,
+		
+		crypto: nil,
 	}
 
 	// start send loop
-	go sendUDP(outgoing, conn)
-	go listenUDP(conn, tun, incoming)
-	go listenTUN(tun, outgoing)
+	go client.sendUDP(conn)
+	go client.listenUDP(conn, tun)
+	go client.listenTUN(tun)
 
 	client.Start()
 
 	select {}
 }
 
-func listenTUN(tun *water.Interface, outgoing chan []byte) {
+func (c *Client) listenTUN(tun *water.Interface) {
 	buf := make([]byte, 65535)
-	p := common.Packet{
-		Header: common.Header{
-			PacketType: common.DATA,
-			PeerIndex:  0,
-			Counter:    0,
-		},
-		Payload: nil,
-	}
 
 	for {
 		n, err := tun.Read(buf)
@@ -182,20 +184,30 @@ func listenTUN(tun *water.Interface, outgoing chan []byte) {
 			continue
 		}
 
-		p.Header.PacketType = common.DATA
-		p.Header.PeerIndex = 0
-		p.Header.Counter = nextSequenceNumber.Load()
-		p.Payload = buf[:n]
+		encryptedData, err := c.crypto.Encrypt(buf[:n])
+		if err != nil {
+			log.Printf("listenTUN: encrypt: %v\n", err)
+			continue
+		}
+
+		p := common.Packet{
+			Header: common.Header{
+				PacketType: common.DATA,
+				PeerIndex:  0,
+				Counter:    nextSequenceNumber.Load(),
+			},
+			Payload: encryptedData,
+		}
 
 		encodedPacket := common.EncodePacket(p)
 		nextSequenceNumber.Add(1)
 
-		outgoing <- encodedPacket
+		c.outgoing <- encodedPacket
 	}
 }
 
-func sendUDP(outgoing chan []byte, conn net.Conn) {
-	for packet := range outgoing {
+func (c *Client) sendUDP(conn net.Conn) {
+	for packet := range c.outgoing {
 		if _, err := conn.Write(packet); err != nil {
 			log.Printf("write: %v", err)
 			continue
@@ -203,7 +215,7 @@ func sendUDP(outgoing chan []byte, conn net.Conn) {
 	}
 }
 
-func listenUDP(conn net.Conn, tun *water.Interface, incoming chan common.Packet) {
+func (c *Client) listenUDP(conn net.Conn, tun *water.Interface) {
 	buf := make([]byte, 65535)
 	for {
 		n, err := conn.Read(buf)
@@ -215,12 +227,18 @@ func listenUDP(conn net.Conn, tun *water.Interface, incoming chan common.Packet)
 		p := common.DecodePacket(buf[:n])
 
 		if p.Header.PacketType == common.DATA {
-			if _, err = tun.Write(p.Payload); err != nil {
+			decryptedData, err := c.crypto.Decrypt(p.Payload)
+			if err != nil {
+				log.Printf("listenUDP: decrypt: %v\n", err)
+				continue
+			}
+
+			if _, err = tun.Write(decryptedData); err != nil {
 				log.Printf("error writing to TUN: %v\n", err)
 			}
 			continue
 		}
 
-		incoming <- p
+		c.incoming <- p
 	}
 }
