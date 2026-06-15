@@ -7,6 +7,7 @@ import (
 	"net"
 	"os/exec"
 	"sync/atomic"
+	"time"
 
 	"github.com/songgao/water"
 
@@ -16,7 +17,7 @@ import (
 const (
 	ipAddr    = "10.0.5.2"
 	peer      = "10.0.5.1"
-	serverUDP = "192.168.1.2:55635"
+	serverUDP = "94.232.42.18:55635"
 )
 
 var nextSequenceNumber atomic.Uint64
@@ -37,8 +38,8 @@ type Client struct {
 	serverPublicKey *ecdh.PublicKey
 	secret          []byte
 
-	incoming 		chan common.Packet
-	outgoing        chan []byte
+	incoming chan common.Packet
+	outgoing chan []byte
 
 	curve            ecdh.Curve
 	clientPrivateKey *ecdh.PrivateKey
@@ -48,42 +49,39 @@ type Client struct {
 }
 
 func (c *Client) Start() {
-	for {
-		switch c.s {
-		case StateHandshakeInit:
-			p := common.Packet{
-				Header: common.Header{
-					PacketType: common.HANDSHAKE_INIT,
-					PeerIndex:  0,
-					Counter:    nextSequenceNumber.Load(),
-				},
-				Payload: c.clientPublicKey.Bytes(),
-			}
+	p := common.Packet{
+		Header: common.Header{
+			PacketType: common.HANDSHAKE_INIT,
+			PeerIndex:  0,
+			Counter:    nextSequenceNumber.Load(),
+		},
+		Payload: c.clientPublicKey.Bytes(),
+	}
 
-			encHandshake := common.EncodePacket(p)
+	encHandshake := common.EncodePacket(p)
 
-			c.outgoing <- encHandshake
-			c.s = StateWaitHandshakeResp
+	c.outgoing <- encHandshake
 
-		case StateWaitHandshakeResp:
-			p := <-c.incoming
-
-			if p.Header.PacketType != common.HANDSHAKE_INIT {
-				continue
+	for i := range 3 {
+		log.Printf("Handshake #%v\n", i)
+		select {
+		case resp := <-c.incoming:
+			if resp.Header.PacketType != common.HANDSHAKE_INIT {
+				return
 			}
 
 			var err error
 
-			c.serverPublicKey, err = c.curve.NewPublicKey(p.Payload)
+			c.serverPublicKey, err = c.curve.NewPublicKey(resp.Payload)
 			if err != nil {
 				log.Printf("error creating new public key: %v\n", err)
-				continue
+				return
 			}
 
 			c.secret, err = c.clientPrivateKey.ECDH(c.serverPublicKey)
 			if err != nil {
 				log.Printf("error computing the secret: %v\n", err)
-				continue
+				return
 			}
 
 			log.Printf("secret: %v\n", c.secret)
@@ -91,15 +89,14 @@ func (c *Client) Start() {
 			c.crypto, err = common.NewCrypto(c.secret)
 			if err != nil {
 				log.Printf("error creating crypto: %v\n", err)
-				continue
+				return
 			}
-			
-			c.s = StateTransmit
 
-		case StateTransmit: 
-			return	
+			return
+
+		case <-time.After(2 * time.Second):
+			continue
 		}
-
 	}
 }
 
@@ -115,6 +112,7 @@ func main() {
 	if err != nil {
 		log.Fatalln("error create tun: ", err)
 	}
+	defer tun.Close()
 
 	cmds := [][]string{
 		{"ip", "link", "set", tun.Name(), "up"},
@@ -148,19 +146,19 @@ func main() {
 	incoming := make(chan common.Packet)
 	outgoing := make(chan []byte)
 
-	client := Client {
+	client := Client{
 		s: StateHandshakeInit,
 
 		serverPublicKey: nil,
-		secret: nil,
+		secret:          nil,
 
 		outgoing: outgoing,
 		incoming: incoming,
 
-		curve: curve,
+		curve:            curve,
 		clientPrivateKey: clientPrivateKey,
-		clientPublicKey: clientPublicKey,
-		
+		clientPublicKey:  clientPublicKey,
+
 		crypto: nil,
 	}
 
@@ -184,7 +182,9 @@ func (c *Client) listenTUN(tun *water.Interface) {
 			continue
 		}
 
-		if c.crypto == nil { continue }
+		if c.crypto == nil {
+			continue
+		}
 
 		encryptedData, err := c.crypto.Encrypt(buf[:n])
 		if err != nil {
@@ -228,8 +228,12 @@ func (c *Client) listenUDP(conn net.Conn, tun *water.Interface) {
 
 		p := common.DecodePacket(buf[:n])
 
+		log.Printf("Incoming packet: %#v\n", p)
+
 		if p.Header.PacketType == common.DATA {
-			if c.crypto == nil { continue }
+			if c.crypto == nil {
+				continue
+			}
 			decryptedData, err := c.crypto.Decrypt(p.Payload)
 			if err != nil {
 				log.Printf("listenUDP: decrypt: %v\n", err)

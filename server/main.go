@@ -35,7 +35,7 @@ type Session struct {
 	clientPublicKey *ecdh.PublicKey
 	secret          []byte
 
-	outgoing        chan []byte
+	outgoing chan []byte
 	incoming chan common.Packet
 
 	curve            ecdh.Curve
@@ -86,11 +86,9 @@ func (s *Session) HandlePacket(p common.Packet) error {
 			return err
 		}
 
-
 		s.s = StateTransmit
 
 	case StateTransmit:
-
 
 	default:
 		return nil
@@ -115,6 +113,10 @@ func main() {
 	cmds := [][]string{
 		{"ip", "link", "set", tun.Name(), "up"},
 		{"ip", "addr", "add", ipAddr + "/32", "peer", peer, "dev", tun.Name()},
+		{"iptables", "-t", "nat", "-A", "POSTROUTING", "-o", "eth0", "-j", "MASQUERADE"},
+		{"iptables", "-A", "FORWARD", "-i", tun.Name(), "-j", "ACCEPT"},
+		{"iptables", "-A", "FORWARD", "-o", tun.Name(), "-j", "ACCEPT"},
+		{"sysctl", "-w", "net.ipv4.ip_forward=1"},
 	}
 
 	for _, cmd := range cmds {
@@ -183,7 +185,13 @@ func (s *Session) listenUDP(tun *water.Interface, conn *net.UDPConn) {
 		remoteAddr.Store(clientAddr)
 		p := common.DecodePacket(buf[:n])
 
+		log.Printf("Incoming packet: %#v\n", p)
+
 		if p.Header.PacketType == common.DATA {
+			if s.crypto == nil {
+				continue
+			}
+
 			decrypted, err := s.crypto.Decrypt(p.Payload)
 			if err != nil {
 				log.Println("listenUDP: decrypt: ", err)
@@ -210,7 +218,9 @@ func (s *Session) listenTUN(tun *water.Interface) {
 			continue
 		}
 
-		if s.crypto == nil { continue }
+		if s.crypto == nil {
+			continue
+		}
 
 		encryptedData, err := s.crypto.Encrypt(buf[:n])
 		if err != nil {
