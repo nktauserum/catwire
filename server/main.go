@@ -19,9 +19,7 @@ const peer = "10.0.5.2"
 var remoteAddr atomic.Pointer[net.UDPAddr]
 var nextSequenceNumber atomic.Uint64
 
-
 type Session struct {
-
 	clientPublicKey *ecdh.PublicKey
 	secret          []byte
 
@@ -54,7 +52,7 @@ func (s *Session) HandlePacket(p common.Packet) error {
 		return err
 	}
 
-	log.Printf("secret: %v\n", s.secret)
+	log.Printf("The shared secret was computed!\n")
 
 	resp := common.Packet{
 		Header: common.Header{
@@ -146,6 +144,8 @@ func main() {
 	go s.listenUDP(tun, conn)
 	go s.listenTUN(tun)
 
+	log.Printf("Listening on :55635\n")
+
 	for p := range incoming {
 		s.HandlePacket(p)
 	}
@@ -163,7 +163,7 @@ func (s *Session) listenUDP(tun *water.Interface, conn *net.UDPConn) {
 		remoteAddr.Store(clientAddr)
 		p := common.DecodePacket(buf[:n])
 
-		log.Printf("Incoming packet: %#v\n", p)
+		log.Printf("Incoming packet: from %v len(%v)\n", common.ExtractSourceIP(buf[:n]), n)
 
 		if p.Header.PacketType == common.DATA {
 			if s.crypto == nil {
@@ -205,6 +205,8 @@ func (s *Session) listenTUN(tun *water.Interface) {
 			log.Printf("listenTUN: encrypt: %v\n", err)
 			continue
 		}
+
+		log.Printf("Outgoing packet: to %v len(%v)\n", common.ExtractDestinationIP(buf[:n]), n)
 
 		p := common.Packet{
 			Header: common.Header{

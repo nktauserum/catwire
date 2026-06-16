@@ -15,7 +15,7 @@ func TestSendNewPacket(t *testing.T) {
 	}
 
 	packet := Packet{Payload: payload, Header: header}
-	encodedPacket := SendNewPacket(packet)
+	encodedPacket := EncodePacket(packet)
 
 	t.Logf("packet: \n%#v\n", packet)
 	t.Logf("encoded packet: \n%v\n", encodedPacket)
@@ -34,8 +34,8 @@ func TestReceiveNewPacket(t *testing.T) {
 		PeerIndex:  0,
 		Counter:    0,
 	}
-	encodedPacket := SendNewPacket(Packet{Payload: payload, Header: header})
-	packet := ReceiveNewPacket(encodedPacket)
+	encodedPacket := EncodePacket(Packet{Payload: payload, Header: header})
+	packet := DecodePacket(encodedPacket)
 
 	assert.Equal(t, header.PacketType, packet.Header.PacketType, "PacketType don't match")
 	assert.Equal(t, header.PeerIndex, packet.Header.PeerIndex, "PeerIndex don't match")
