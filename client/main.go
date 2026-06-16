@@ -22,19 +22,7 @@ const (
 
 var nextSequenceNumber atomic.Uint64
 
-type State uint8
-
-const (
-	StateHandshakeInit State = iota
-	StateWaitHandshakeResp
-	StateHandshakeFinish
-	StateWaiting
-	StateTransmit
-)
-
 type Client struct {
-	s State
-
 	serverPublicKey *ecdh.PublicKey
 	secret          []byte
 
@@ -147,8 +135,6 @@ func main() {
 	outgoing := make(chan []byte)
 
 	client := Client{
-		s: StateHandshakeInit,
-
 		serverPublicKey: nil,
 		secret:          nil,
 
@@ -185,6 +171,8 @@ func (c *Client) listenTUN(tun *water.Interface) {
 		if c.crypto == nil {
 			continue
 		}
+
+		log.Printf("Outgoing packet: to %v len(%v)\n", common.ExtractDestinationIP(buf[:n]), n)
 
 		encryptedData, err := c.crypto.Encrypt(buf[:n])
 		if err != nil {
@@ -228,7 +216,7 @@ func (c *Client) listenUDP(conn net.Conn, tun *water.Interface) {
 
 		p := common.DecodePacket(buf[:n])
 
-		log.Printf("Incoming packet: %#v\n", p)
+		log.Printf("Incoming packet: len(%v)\n", n)
 
 		if p.Header.PacketType == common.DATA {
 			if c.crypto == nil {

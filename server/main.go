@@ -163,7 +163,7 @@ func (s *Session) listenUDP(tun *water.Interface, conn *net.UDPConn) {
 		remoteAddr.Store(clientAddr)
 		p := common.DecodePacket(buf[:n])
 
-		log.Printf("Incoming packet: from %v len(%v)\n", common.ExtractSourceIP(buf[:n]), n)
+		log.Printf("Incoming packet: from %v len(%v)\n", clientAddr, n)
 
 		if p.Header.PacketType == common.DATA {
 			if s.crypto == nil {
