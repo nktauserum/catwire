@@ -19,18 +19,8 @@ const peer = "10.0.5.2"
 var remoteAddr atomic.Pointer[net.UDPAddr]
 var nextSequenceNumber atomic.Uint64
 
-type State uint8
-
-const (
-	StateWaitHandshakeInit State = iota
-	StateWaitHandshakeResp
-	StateHandshakeFinish
-	StateWaiting
-	StateTransmit
-)
 
 type Session struct {
-	s State
 
 	clientPublicKey *ecdh.PublicKey
 	secret          []byte
@@ -46,52 +36,42 @@ type Session struct {
 }
 
 func (s *Session) HandlePacket(p common.Packet) error {
-	switch s.s {
-	case StateWaitHandshakeInit:
-		if p.Header.PacketType != common.HANDSHAKE_INIT {
-			// not matching
-			return nil
-		}
-
-		var err error
-		s.clientPublicKey, err = s.curve.NewPublicKey(p.Payload)
-		if err != nil {
-			log.Printf("error creating new public key: %v\n", err)
-			return err
-		}
-
-		s.secret, err = s.serverPrivateKey.ECDH(s.clientPublicKey)
-		if err != nil {
-			log.Printf("error computing the secret: %v\n", err)
-			return err
-		}
-
-		log.Printf("secret: %v\n", s.secret)
-
-		p := common.Packet{
-			Header: common.Header{
-				PacketType: common.HANDSHAKE_INIT,
-				PeerIndex:  0, // maybe here we'll set the peer index
-				Counter:    nextSequenceNumber.Load(),
-			},
-			Payload: s.serverPublicKey.Bytes(),
-		}
-
-		enc := common.EncodePacket(p)
-		s.outgoing <- enc
-
-		s.crypto, err = common.NewCrypto(s.secret)
-		if err != nil {
-			log.Printf("error creating crypto: %v\n", err)
-			return err
-		}
-
-		s.s = StateTransmit
-
-	case StateTransmit:
-
-	default:
+	if p.Header.PacketType != common.HANDSHAKE_INIT {
+		// now only this type
 		return nil
+	}
+
+	var err error
+	s.clientPublicKey, err = s.curve.NewPublicKey(p.Payload)
+	if err != nil {
+		log.Printf("error creating new public key: %v\n", err)
+		return err
+	}
+
+	s.secret, err = s.serverPrivateKey.ECDH(s.clientPublicKey)
+	if err != nil {
+		log.Printf("error computing the secret: %v\n", err)
+		return err
+	}
+
+	log.Printf("secret: %v\n", s.secret)
+
+	resp := common.Packet{
+		Header: common.Header{
+			PacketType: common.HANDSHAKE_INIT,
+			PeerIndex:  0, // maybe here we'll set the peer index
+			Counter:    nextSequenceNumber.Load(),
+		},
+		Payload: s.serverPublicKey.Bytes(),
+	}
+
+	enc := common.EncodePacket(resp)
+	s.outgoing <- enc
+
+	s.crypto, err = common.NewCrypto(s.secret)
+	if err != nil {
+		log.Printf("error creating crypto: %v\n", err)
+		return err
 	}
 
 	return nil
@@ -149,8 +129,6 @@ func main() {
 	outgoing := make(chan []byte)
 
 	s := Session{
-		s: StateWaitHandshakeInit,
-
 		clientPublicKey: nil,
 		secret:          nil,
 
