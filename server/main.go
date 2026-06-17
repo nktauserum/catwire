@@ -3,9 +3,12 @@ package main
 import (
 	"crypto/ecdh"
 	"crypto/rand"
+	"fmt"
 	"log"
 	"net"
 	"os/exec"
+	"slices"
+	"sync"
 	"sync/atomic"
 
 	"github.com/songgao/water"
@@ -16,7 +19,6 @@ import (
 const ipAddr = "10.0.5.1"
 const peer = "10.0.5.2"
 
-var remoteAddr atomic.Pointer[net.UDPAddr]
 var nextSequenceNumber atomic.Uint64
 
 type Session struct {
@@ -24,55 +26,206 @@ type Session struct {
 	secret          []byte
 
 	outgoing chan []byte
-	incoming chan common.Packet
+
+	crypto *common.Crypto
+
+	remoteAddr atomic.Pointer[net.UDPAddr]
+	conn       *net.UDPConn
+	peerIndex  uint64
+}
+
+type PeerIndices struct {
+	lookupTable []*Session
+	mu          sync.Mutex
+	next        atomic.Uint64
+}
+
+func (pi *PeerIndices) Next() uint64 {
+	n := pi.next.Load()
+	pi.next.Add(1)
+	return n
+}
+
+func (pi *PeerIndices) Add(peerIndex uint64, session *Session) {
+	pi.mu.Lock()
+	pi.lookupTable[peerIndex] = session
+	pi.mu.Unlock()
+	pi.next.Add(1)
+}
+
+func (pi *PeerIndices) Load(peerIndex uint64) (*Session, error) {
+	if peerIndex >= pi.next.Load() {
+		return nil, fmt.Errorf("no such peerIndex")
+	}
+
+	pi.mu.Lock()
+	s := pi.lookupTable[peerIndex]
+	pi.mu.Unlock()
+
+	return s, nil
+}
+
+type PeerRouting struct {
+	lookupTable map[string]*Session
+	mu          sync.RWMutex
+}
+
+type Server struct {
+	IndexLookupTable PeerIndices
+	AllowedIPs       []string
+	IPLookupTable    PeerRouting
 
 	curve            ecdh.Curve
 	serverPrivateKey *ecdh.PrivateKey
 	serverPublicKey  *ecdh.PublicKey
 
-	crypto *common.Crypto
+	outgoing chan []byte
+
+	conn *net.UDPConn
 }
 
-func (s *Session) HandlePacket(p common.Packet) error {
-	if p.Header.PacketType != common.HANDSHAKE_INIT {
-		// now only this type
-		return nil
-	}
+func (s *Server) listenUDP() {
+	buf := make([]byte, 65535)
+	for {
+		n, clientAddr, err := s.conn.ReadFromUDP(buf)
+		if err != nil {
+			log.Println("read: ", err)
+			continue
+		}
 
-	var err error
-	s.clientPublicKey, err = s.curve.NewPublicKey(p.Payload)
+		p := common.DecodePacket(buf[:n])
+
+		log.Printf("Incoming packet: from %v len(%v)\n", clientAddr, n)
+
+		if p.Header.PacketType == common.DATA && p.Header.PeerIndex != 0 {
+			session, err := s.IndexLookupTable.Load(p.Header.PeerIndex)
+			if err != nil {
+				log.Printf("Error loading session with index %v: %v\n", p.Header.PeerIndex, err)
+				continue
+			}
+
+			go session.Incoming(p, clientAddr)
+
+			continue
+		}
+
+		// handshake
+		go func() {
+			if slices.Contains(s.AllowedIPs, string(p.Payload)) {
+				session := &Session{
+					outgoing: s.outgoing,
+				}
+
+				session.remoteAddr.Store(clientAddr)
+
+				var err error
+				session.clientPublicKey, err = s.curve.NewPublicKey(p.Payload)
+				if err != nil {
+					log.Printf("error creating new public key: %v\n", err)
+					return
+				}
+
+				secret, err := s.serverPrivateKey.ECDH(session.clientPublicKey)
+				if err != nil {
+					log.Printf("error computing the secret: %v\n", err)
+					return
+				}
+
+				log.Printf("The shared secret was computed!\n")
+
+				session.crypto, err = common.NewCrypto(secret)
+				if err != nil {
+					log.Printf("error creating crypto: %v\n", err)
+					return
+				}
+
+				session.peerIndex = s.IndexLookupTable.Next()
+				s.IndexLookupTable.Add(session.peerIndex, session)
+
+				resp := common.Packet{
+					Header: common.Header{
+						PacketType: common.HANDSHAKE_INIT,
+						PeerIndex:  session.peerIndex,
+						Counter:    nextSequenceNumber.Load(),
+					},
+					Payload: s.serverPublicKey.Bytes(),
+				}
+
+				enc := common.EncodePacket(resp)
+
+				session.send(enc) // вызываем внутреннюю функцию Session для отправки байтов сразу в UDP
+			}
+		} ()
+	}
+}
+
+func (s *Session) send(data []byte) {
+	if clientAddr := s.remoteAddr.Load(); clientAddr != nil {
+		if _, err := s.conn.WriteToUDP(data, clientAddr); err != nil {
+			log.Println("write: ", err)
+		}
+	}
+}
+
+func (s *Session) Incoming(p common.Packet, remoteAddr *net.UDPAddr) {
+	decrypted, err := s.crypto.Decrypt(p.Payload)
 	if err != nil {
-		log.Printf("error creating new public key: %v\n", err)
-		return err
+		log.Printf("Error decrypt packet from %v len(%v): %v\n", remoteAddr.String(), len(p.Payload), err)
+		return
 	}
 
-	s.secret, err = s.serverPrivateKey.ECDH(s.clientPublicKey)
+	s.remoteAddr.Store(remoteAddr)
+
+	s.outgoing <- decrypted // to TUN
+}
+
+func (s *Session) Outgoing(data []byte) {
+	encrypted, err := s.crypto.Encrypt(data)
 	if err != nil {
-		log.Printf("error computing the secret: %v\n", err)
-		return err
+		log.Printf("Error encrypt packet: %v\n", err)
+		return
 	}
 
-	log.Printf("The shared secret was computed!\n")
-
-	resp := common.Packet{
+	p := common.Packet{
 		Header: common.Header{
-			PacketType: common.HANDSHAKE_INIT,
-			PeerIndex:  0, // maybe here we'll set the peer index
+			PacketType: common.DATA,
+			PeerIndex:  s.peerIndex,
 			Counter:    nextSequenceNumber.Load(),
 		},
-		Payload: s.serverPublicKey.Bytes(),
+		Payload: encrypted,
 	}
 
-	enc := common.EncodePacket(resp)
-	s.outgoing <- enc
+	encoded := common.EncodePacket(p)
+	s.send(encoded) // directly to UDP
+}
 
-	s.crypto, err = common.NewCrypto(s.secret)
-	if err != nil {
-		log.Printf("error creating crypto: %v\n", err)
-		return err
+func (s *Server) listenTUN(tun *water.Interface) {
+	buf := make([]byte, 65535)
+
+	for {
+		n, err := tun.Read(buf)
+		if err != nil {
+			log.Println("write: ", err)
+			continue
+		}
+
+		destIP := common.ExtractDestinationIP(buf[:n])
+		log.Printf("listenTUN: to %v len(%v)\n", destIP, n)
+		
+		s.IPLookupTable.mu.RLock()
+		session := s.IPLookupTable.lookupTable[destIP]
+		s.IPLookupTable.mu.RUnlock()
+
+		session.Outgoing(buf[:n])
 	}
+}
 
-	return nil
+func sendTUN(tun *water.Interface, outgoing chan []byte) {
+	for data := range outgoing {
+		if _, err := tun.Write(data); err != nil {
+			log.Println("read: ", err)
+		}
+	}
 }
 
 func main() {
@@ -123,113 +276,31 @@ func main() {
 	}
 	defer conn.Close()
 
-	incoming := make(chan common.Packet)
 	outgoing := make(chan []byte)
 
-	s := Session{
-		clientPublicKey: nil,
-		secret:          nil,
+	allowedIPs := []string {"pubkey1", "pubkey2"}
 
+	s := Server {
+		conn: conn,
 		outgoing: outgoing,
-		incoming: incoming,
 
 		curve:            curve,
 		serverPrivateKey: serverPrivateKey,
 		serverPublicKey:  serverPublicKey,
 
-		crypto: nil,
+		IPLookupTable: PeerRouting {
+			lookupTable: make(map[string]*Session),
+		},
+		IndexLookupTable: PeerIndices {
+			lookupTable: make([]*Session, 0, len(allowedIPs)),
+		},
+		AllowedIPs: allowedIPs,
 	}
 
-	go s.sendUDP(conn)
-	go s.listenUDP(tun, conn)
+	go sendTUN(tun, outgoing)
 	go s.listenTUN(tun)
 
 	log.Printf("Listening on :55635\n")
 
-	for p := range incoming {
-		s.HandlePacket(p)
-	}
-}
-
-func (s *Session) listenUDP(tun *water.Interface, conn *net.UDPConn) {
-	buf := make([]byte, 65535)
-	for {
-		n, clientAddr, err := conn.ReadFromUDP(buf)
-		if err != nil {
-			log.Println("read: ", err)
-			continue
-		}
-
-		remoteAddr.Store(clientAddr)
-		p := common.DecodePacket(buf[:n])
-
-		log.Printf("Incoming packet: from %v len(%v)\n", clientAddr, n)
-
-		if p.Header.PacketType == common.DATA {
-			if s.crypto == nil {
-				continue
-			}
-
-			decrypted, err := s.crypto.Decrypt(p.Payload)
-			if err != nil {
-				log.Println("listenUDP: decrypt: ", err)
-				continue
-			}
-
-			if _, err = tun.Write(decrypted); err != nil {
-				log.Println("read: ", err)
-			}
-			continue
-		}
-
-		s.incoming <- p
-	}
-}
-
-func (s *Session) listenTUN(tun *water.Interface) {
-	buf := make([]byte, 65535)
-
-	for {
-		n, err := tun.Read(buf)
-		if err != nil {
-			log.Println("write: ", err)
-			continue
-		}
-
-		if s.crypto == nil {
-			continue
-		}
-
-		encryptedData, err := s.crypto.Encrypt(buf[:n])
-		if err != nil {
-			log.Printf("listenTUN: encrypt: %v\n", err)
-			continue
-		}
-
-		log.Printf("Outgoing packet: to %v len(%v)\n", common.ExtractDestinationIP(buf[:n]), n)
-
-		p := common.Packet{
-			Header: common.Header{
-				PacketType: common.DATA,
-				PeerIndex:  0,
-				Counter:    nextSequenceNumber.Load(),
-			},
-			Payload: encryptedData,
-		}
-
-		encodedPacket := common.EncodePacket(p)
-		nextSequenceNumber.Add(1)
-
-		s.outgoing <- encodedPacket
-	}
-}
-
-func (s *Session) sendUDP(conn *net.UDPConn) {
-	for packet := range s.outgoing {
-		if clientAddr := remoteAddr.Load(); clientAddr != nil {
-			if _, err := conn.WriteToUDP(packet, clientAddr); err != nil {
-				log.Println("write: ", err)
-			}
-		}
-	}
+	s.listenUDP()
 }
