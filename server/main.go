@@ -37,30 +37,21 @@ type Session struct {
 type PeerIndices struct {
 	lookupTable []*Session
 	mu          sync.Mutex
-	next        atomic.Uint64
-}
-
-func (pi *PeerIndices) Next() uint64 {
-	n := pi.next.Load()
-	pi.next.Add(1)
-	return n
-}
-
-func (pi *PeerIndices) Add(peerIndex uint64, session *Session) {
-	pi.mu.Lock()
-	pi.lookupTable[peerIndex] = session
-	pi.mu.Unlock()
-	pi.next.Add(1)
 }
 
 func (pi *PeerIndices) Load(peerIndex uint64) (*Session, error) {
-	if peerIndex >= pi.next.Load() {
+	pi.mu.Lock()
+	defer pi.mu.Unlock()
+
+	if peerIndex >= uint64(len(pi.lookupTable)) {
 		return nil, fmt.Errorf("no such peerIndex")
 	}
 
-	pi.mu.Lock()
 	s := pi.lookupTable[peerIndex]
-	pi.mu.Unlock()
+
+	if s == nil {
+		return nil, fmt.Errorf("session equals nil")
+	}
 
 	return s, nil
 }
@@ -72,7 +63,7 @@ type PeerRouting struct {
 
 type Server struct {
 	IndexLookupTable PeerIndices
-	AllowedIPs       []string
+	AllowedIPs       map[string]string // TODO: use uint32 for IPv4 addr
 	IPLookupTable    PeerRouting
 
 	curve            ecdh.Curve
@@ -104,16 +95,18 @@ func (s *Server) listenUDP() {
 				continue
 			}
 
-			go session.Incoming(p, clientAddr)
+			session.Incoming(p, clientAddr)
 
 			continue
 		}
 
 		// handshake
 		go func() {
-			if slices.Contains(s.AllowedIPs, string(p.Payload)) {
+			clientIP, exists := s.AllowedIPs[string(p.Payload)]
+			if exists {
 				session := &Session{
 					outgoing: s.outgoing,
+					conn: s.conn,
 				}
 
 				session.remoteAddr.Store(clientAddr)
@@ -139,8 +132,14 @@ func (s *Server) listenUDP() {
 					return
 				}
 
-				session.peerIndex = s.IndexLookupTable.Next()
-				s.IndexLookupTable.Add(session.peerIndex, session)
+				s.IndexLookupTable.mu.Lock()
+				session.peerIndex = uint64(len(s.IndexLookupTable.lookupTable))
+				s.IndexLookupTable.lookupTable = append(s.IndexLookupTable.lookupTable, session)
+				s.IndexLookupTable.mu.Unlock()
+
+				s.IPLookupTable.mu.Lock()
+				s.IPLookupTable.lookupTable[clientIP] = session
+				s.IPLookupTable.mu.Unlock()
 
 				resp := common.Packet{
 					Header: common.Header{
@@ -168,6 +167,11 @@ func (s *Session) send(data []byte) {
 }
 
 func (s *Session) Incoming(p common.Packet, remoteAddr *net.UDPAddr) {
+	if p.Header.PeerIndex != s.peerIndex {
+		log.Printf("Invalid peerIndex: expected %v, got %v\n", s.peerIndex, p.Header.PeerIndex)
+		return
+	}
+
 	decrypted, err := s.crypto.Decrypt(p.Payload)
 	if err != nil {
 		log.Printf("Error decrypt packet from %v len(%v): %v\n", remoteAddr.String(), len(p.Payload), err)
@@ -215,6 +219,11 @@ func (s *Server) listenTUN(tun *water.Interface) {
 		s.IPLookupTable.mu.RLock()
 		session := s.IPLookupTable.lookupTable[destIP]
 		s.IPLookupTable.mu.RUnlock()
+
+		if session == nil {
+			log.Printf("No route for %v\n", destIP)
+			continue
+		}
 
 		session.Outgoing(buf[:n])
 	}
@@ -278,7 +287,10 @@ func main() {
 
 	outgoing := make(chan []byte)
 
-	allowedIPs := []string {"pubkey1", "pubkey2"}
+	allowedIPs := map[string]string {
+		"pubkey1": "10.0.5.2", 
+		"pubkey2": "10.0.5.3",
+	}
 
 	s := Server {
 		conn: conn,
