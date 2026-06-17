@@ -2,7 +2,7 @@ package main
 
 import (
 	"crypto/ecdh"
-	"crypto/rand"
+	"encoding/base64"
 	"log"
 	"net"
 	"os/exec"
@@ -16,16 +16,13 @@ import (
 
 const (
 	ipAddr    = "10.0.5.2"
-	peer      = "10.0.5.1"
 	serverUDP = "94.232.42.18:55635"
+	privKey   = "WIzlNXUEGlpWdLaxrEL/5xuQFvVFcjCIjwub87GWrac="
 )
 
 var nextSequenceNumber atomic.Uint64
 
 type Client struct {
-	serverPublicKey *ecdh.PublicKey
-	secret          []byte
-
 	incoming chan common.Packet
 	outgoing chan []byte
 
@@ -33,25 +30,25 @@ type Client struct {
 	clientPrivateKey *ecdh.PrivateKey
 	clientPublicKey  *ecdh.PublicKey
 
-	crypto *common.Crypto
+	crypto    *common.Crypto
+	peerIndex uint64
 }
 
 func (c *Client) Start() {
-	p := common.Packet{
-		Header: common.Header{
-			PacketType: common.HANDSHAKE_INIT,
-			PeerIndex:  0,
-			Counter:    nextSequenceNumber.Load(),
-		},
-		Payload: c.clientPublicKey.Bytes(),
-	}
+	for range 5 {
+		p := common.Packet{
+			Header: common.Header{
+				PacketType: common.HANDSHAKE_INIT,
+				PeerIndex:  0,
+				Counter:    nextSequenceNumber.Load(),
+			},
+			Payload: c.clientPublicKey.Bytes(),
+		}
 
-	encHandshake := common.EncodePacket(p)
+		encHandshake := common.EncodePacket(p)
 
-	c.outgoing <- encHandshake
+		c.outgoing <- encHandshake
 
-	for i := range 3 {
-		log.Printf("Handshake #%v\n", i)
 		select {
 		case resp := <-c.incoming:
 			if resp.Header.PacketType != common.HANDSHAKE_INIT {
@@ -60,29 +57,32 @@ func (c *Client) Start() {
 
 			var err error
 
-			c.serverPublicKey, err = c.curve.NewPublicKey(resp.Payload)
+			serverPub, err := c.curve.NewPublicKey(resp.Payload)
 			if err != nil {
 				log.Printf("error creating new public key: %v\n", err)
 				return
 			}
 
-			c.secret, err = c.clientPrivateKey.ECDH(c.serverPublicKey)
+			secret, err := c.clientPrivateKey.ECDH(serverPub)
 			if err != nil {
 				log.Printf("error computing the secret: %v\n", err)
 				return
 			}
 
-			log.Printf("secret: %v\n", c.secret)
+			log.Printf("secret: %v\n", secret)
 
-			c.crypto, err = common.NewCrypto(c.secret)
+			crypto, err := common.NewCrypto(secret)
 			if err != nil {
 				log.Printf("error creating crypto: %v\n", err)
 				return
 			}
 
+			c.peerIndex = resp.Header.PeerIndex
+			c.crypto = crypto
+
 			return
 
-		case <-time.After(2 * time.Second):
+		case <-time.After(4 * time.Second):
 			continue
 		}
 	}
@@ -104,7 +104,8 @@ func main() {
 
 	cmds := [][]string{
 		{"ip", "link", "set", tun.Name(), "up"},
-		{"ip", "addr", "add", ipAddr + "/32", "peer", peer, "dev", tun.Name()},
+		{"ip", "addr", "add", ipAddr + "/24", "dev", tun.Name()},
+		{"ip", "route", "replace", "10.0.5.0/24", "dev", tun.Name()},
 	}
 
 	for _, cmd := range cmds {
@@ -117,7 +118,12 @@ func main() {
 	log.Println("Successfully created TUN interface")
 
 	curve := ecdh.X25519()
-	clientPrivateKey, err := curve.GenerateKey(rand.Reader)
+	privKeyBytes, err := base64.StdEncoding.DecodeString(privKey)
+	if err != nil {
+		log.Fatalln("decode private key:", err)
+	}
+
+	clientPrivateKey, err := curve.NewPrivateKey(privKeyBytes)
 	if err != nil {
 		log.Fatalf("error generating client private key: %v\n", err)
 	}
@@ -135,8 +141,6 @@ func main() {
 	outgoing := make(chan []byte)
 
 	client := Client{
-		serverPublicKey: nil,
-		secret:          nil,
 
 		outgoing: outgoing,
 		incoming: incoming,
@@ -145,7 +149,8 @@ func main() {
 		clientPrivateKey: clientPrivateKey,
 		clientPublicKey:  clientPublicKey,
 
-		crypto: nil,
+		crypto:    nil,
+		peerIndex: 0,
 	}
 
 	// start send loop
@@ -183,7 +188,7 @@ func (c *Client) listenTUN(tun *water.Interface) {
 		p := common.Packet{
 			Header: common.Header{
 				PacketType: common.DATA,
-				PeerIndex:  0,
+				PeerIndex:  c.peerIndex,
 				Counter:    nextSequenceNumber.Load(),
 			},
 			Payload: encryptedData,

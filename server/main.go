@@ -3,11 +3,11 @@ package main
 import (
 	"crypto/ecdh"
 	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"log"
 	"net"
 	"os/exec"
-	"slices"
 	"sync"
 	"sync/atomic"
 
@@ -17,7 +17,6 @@ import (
 )
 
 const ipAddr = "10.0.5.1"
-const peer = "10.0.5.2"
 
 var nextSequenceNumber atomic.Uint64
 
@@ -43,11 +42,13 @@ func (pi *PeerIndices) Load(peerIndex uint64) (*Session, error) {
 	pi.mu.Lock()
 	defer pi.mu.Unlock()
 
-	if peerIndex >= uint64(len(pi.lookupTable)) {
+	p := peerIndex - 1
+
+	if p >= uint64(len(pi.lookupTable)) {
 		return nil, fmt.Errorf("no such peerIndex")
 	}
 
-	s := pi.lookupTable[peerIndex]
+	s := pi.lookupTable[p]
 
 	if s == nil {
 		return nil, fmt.Errorf("session equals nil")
@@ -95,18 +96,25 @@ func (s *Server) listenUDP() {
 				continue
 			}
 
-			session.Incoming(p, clientAddr)
+			go session.Incoming(p, clientAddr)
 
 			continue
 		}
 
+		log.Printf("Valid packet: %#v\n", p.Header)
+
 		// handshake
 		go func() {
-			clientIP, exists := s.AllowedIPs[string(p.Payload)]
+			if p.Header.PacketType != common.HANDSHAKE_INIT {
+				return
+			}
+
+			key := base64.StdEncoding.EncodeToString(p.Payload)
+			clientIP, exists := s.AllowedIPs[key]
 			if exists {
 				session := &Session{
 					outgoing: s.outgoing,
-					conn: s.conn,
+					conn:     s.conn,
 				}
 
 				session.remoteAddr.Store(clientAddr)
@@ -133,13 +141,15 @@ func (s *Server) listenUDP() {
 				}
 
 				s.IndexLookupTable.mu.Lock()
-				session.peerIndex = uint64(len(s.IndexLookupTable.lookupTable))
+				session.peerIndex = uint64(len(s.IndexLookupTable.lookupTable)) + 1
 				s.IndexLookupTable.lookupTable = append(s.IndexLookupTable.lookupTable, session)
 				s.IndexLookupTable.mu.Unlock()
 
 				s.IPLookupTable.mu.Lock()
 				s.IPLookupTable.lookupTable[clientIP] = session
 				s.IPLookupTable.mu.Unlock()
+
+				println(session.peerIndex)
 
 				resp := common.Packet{
 					Header: common.Header{
@@ -154,7 +164,7 @@ func (s *Server) listenUDP() {
 
 				session.send(enc) // вызываем внутреннюю функцию Session для отправки байтов сразу в UDP
 			}
-		} ()
+		}()
 	}
 }
 
@@ -178,7 +188,7 @@ func (s *Session) Incoming(p common.Packet, remoteAddr *net.UDPAddr) {
 		return
 	}
 
-	s.remoteAddr.Store(remoteAddr)
+	go s.remoteAddr.Store(remoteAddr)
 
 	s.outgoing <- decrypted // to TUN
 }
@@ -215,13 +225,12 @@ func (s *Server) listenTUN(tun *water.Interface) {
 
 		destIP := common.ExtractDestinationIP(buf[:n])
 		log.Printf("listenTUN: to %v len(%v)\n", destIP, n)
-		
+
 		s.IPLookupTable.mu.RLock()
 		session := s.IPLookupTable.lookupTable[destIP]
 		s.IPLookupTable.mu.RUnlock()
 
 		if session == nil {
-			log.Printf("No route for %v\n", destIP)
 			continue
 		}
 
@@ -252,7 +261,7 @@ func main() {
 
 	cmds := [][]string{
 		{"ip", "link", "set", tun.Name(), "up"},
-		{"ip", "addr", "add", ipAddr + "/32", "peer", peer, "dev", tun.Name()},
+		{"ip", "addr", "add", ipAddr + "/24", "dev", tun.Name()},
 		{"iptables", "-t", "nat", "-A", "POSTROUTING", "-o", "eth0", "-j", "MASQUERADE"},
 		{"iptables", "-A", "FORWARD", "-i", tun.Name(), "-j", "ACCEPT"},
 		{"iptables", "-A", "FORWARD", "-o", tun.Name(), "-j", "ACCEPT"},
@@ -287,23 +296,22 @@ func main() {
 
 	outgoing := make(chan []byte)
 
-	allowedIPs := map[string]string {
-		"pubkey1": "10.0.5.2", 
-		"pubkey2": "10.0.5.3",
+	allowedIPs := map[string]string{
+		"QdYN9vbo7o0kcquz5GltP+ZUUb7YMgmgngAQtkNbmRM=": "10.0.5.2",
 	}
 
-	s := Server {
-		conn: conn,
+	s := Server{
+		conn:     conn,
 		outgoing: outgoing,
 
 		curve:            curve,
 		serverPrivateKey: serverPrivateKey,
 		serverPublicKey:  serverPublicKey,
 
-		IPLookupTable: PeerRouting {
+		IPLookupTable: PeerRouting{
 			lookupTable: make(map[string]*Session),
 		},
-		IndexLookupTable: PeerIndices {
+		IndexLookupTable: PeerIndices{
 			lookupTable: make([]*Session, 0, len(allowedIPs)),
 		},
 		AllowedIPs: allowedIPs,
