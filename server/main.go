@@ -298,6 +298,8 @@ func main() {
 
 	allowedIPs := map[string]string{
 		"QdYN9vbo7o0kcquz5GltP+ZUUb7YMgmgngAQtkNbmRM=": "10.0.5.2",
+		"HDEVOmoAhSHHrYQB8wtAAduzvF4yOS91ST1TZ3i2Z04=": "10.0.5.3",
+		"w0EyAFT3/9wwSG5RVcuyPG+GB1wcdoRLyK9KmGHU0h0=": "10.0.5.4",
 	}
 
 	s := Server{

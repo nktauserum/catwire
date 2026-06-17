@@ -3,14 +3,18 @@ package main
 import (
 	"crypto/ecdh"
 	"encoding/base64"
+	"flag"
+	"fmt"
 	"log"
 	"net"
+	"os"
 	"os/exec"
 	"sync/atomic"
 	"time"
 
 	"github.com/songgao/water"
 
+	"github.com/nktauserum/catwire/client/config"
 	"github.com/nktauserum/catwire/common"
 )
 
@@ -89,6 +93,20 @@ func (c *Client) Start() {
 }
 
 func main() {
+	var configPath string
+	flag.StringVar(&configPath, "config", "", "Path to config")
+	flag.Parse()
+
+	if configPath == "" {
+		fmt.Println("Please provide a relevant config. For more info see --help.")
+		os.Exit(1)
+	}
+
+	config, err := config.LoadConfig(configPath)
+	if err != nil {
+		log.Fatalf("error parsing config: %v\n", err)
+	}
+
 	c := water.Config{
 		DeviceType: water.TUN,
 		PlatformSpecificParams: water.PlatformSpecificParams{
@@ -104,7 +122,7 @@ func main() {
 
 	cmds := [][]string{
 		{"ip", "link", "set", tun.Name(), "up"},
-		{"ip", "addr", "add", ipAddr + "/24", "dev", tun.Name()},
+		{"ip", "addr", "add", config.PeerAddr + "/32", "dev", tun.Name()},
 		{"ip", "route", "replace", "10.0.5.0/24", "dev", tun.Name()},
 	}
 
@@ -118,7 +136,7 @@ func main() {
 	log.Println("Successfully created TUN interface")
 
 	curve := ecdh.X25519()
-	privKeyBytes, err := base64.StdEncoding.DecodeString(privKey)
+	privKeyBytes, err := base64.StdEncoding.DecodeString(config.PrivateKey)
 	if err != nil {
 		log.Fatalln("decode private key:", err)
 	}
@@ -129,7 +147,7 @@ func main() {
 	}
 	clientPublicKey := clientPrivateKey.PublicKey()
 
-	conn, err := net.Dial("udp", serverUDP)
+	conn, err := net.Dial("udp", config.ServerAddr)
 	if err != nil {
 		log.Fatalln("error dialing to the server: ", err)
 	}
