@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"os/signal"
 	"sync/atomic"
 	"time"
 
@@ -116,7 +117,7 @@ func main() {
 
 	serverIP, _, err := net.SplitHostPort(config.ServerAddr)
 	if err != nil {
-		log.Fatalf("Error parsing server address, check it: %v\n", err)	
+		log.Fatalf("Error parsing server address, check it: %v\n", err)
 	}
 
 	cmds := [][]string{
@@ -137,6 +138,22 @@ func main() {
 			log.Fatalf("Failed to run %v: %v, output: %s", cmd, err, string(out))
 		}
 	}
+
+	defer func() {
+		cmds := [][]string{
+			{"ip", "rule", "del", "priority", "112"},
+			{"ip", "rule", "del", "priority", "111"},
+			{"ip", "rule", "del", "priority", "200"},
+			{"ip", "rule", "del", "priority", "100"},
+		}
+
+		for _, cmd := range cmds {
+			out, err := exec.Command(cmd[0], cmd[1:]...).CombinedOutput()
+			if err != nil {
+				log.Fatalf("Failed to run %v: %v, output: %s", cmd, err, string(out))
+			}
+		}
+	}()
 
 	log.Println("Successfully created TUN interface")
 
@@ -181,9 +198,15 @@ func main() {
 	go client.listenUDP(conn, tun)
 	go client.listenTUN(tun)
 
-	client.Start()
+	go client.Start()
 
-	select {}
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, os.Interrupt)
+	defer signal.Stop(ch)
+
+	<-ch
+	println()
+	log.Printf("Graceful shutdown\n")
 }
 
 func (c *Client) listenTUN(tun *water.Interface) {
@@ -192,7 +215,6 @@ func (c *Client) listenTUN(tun *water.Interface) {
 	for {
 		n, err := tun.Read(buf)
 		if err != nil {
-			log.Printf("read: %v\n", err)
 			continue
 		}
 
@@ -236,7 +258,6 @@ func (c *Client) listenUDP(conn net.Conn, tun *water.Interface) {
 	for {
 		n, err := conn.Read(buf)
 		if err != nil {
-			log.Printf("error reading from %s: %v\n", conn.RemoteAddr(), err)
 			continue
 		}
 
