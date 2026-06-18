@@ -18,12 +18,6 @@ import (
 	"github.com/nktauserum/catwire/common"
 )
 
-const (
-	ipAddr    = "10.0.5.2"
-	serverUDP = "94.232.42.18:55635"
-	privKey   = "WIzlNXUEGlpWdLaxrEL/5xuQFvVFcjCIjwub87GWrac="
-)
-
 var nextSequenceNumber atomic.Uint64
 
 type Client struct {
@@ -153,7 +147,7 @@ func main() {
 	}
 	defer conn.Close()
 
-	log.Printf("Dialing the connection to the server on %s\n", serverUDP)
+	log.Printf("Dialing the connection to the server on %s\n", config.ServerAddr)
 
 	incoming := make(chan common.Packet)
 	outgoing := make(chan []byte)
