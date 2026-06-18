@@ -114,10 +114,21 @@ func main() {
 	}
 	defer tun.Close()
 
+	serverIP, _, err := net.SplitHostPort(config.ServerAddr)
+	if err != nil {
+		log.Fatalf("Error parsing server address, check it: %v\n", err)	
+	}
+
 	cmds := [][]string{
 		{"ip", "link", "set", tun.Name(), "up"},
 		{"ip", "addr", "add", config.PeerAddr + "/32", "dev", tun.Name()},
 		{"ip", "route", "replace", "10.0.5.0/24", "dev", tun.Name()},
+
+		{"ip", "route", "add", "default", "dev", tun.Name(), "table", "100"},
+		{"ip", "rule", "add", "priority", "100", "to", serverIP, "lookup", "main"},
+		{"ip", "rule", "add", "priority", "200", "lookup", "100"},
+		{"ip", "rule", "add", "priority", "111", "to", "172.16.0.0/12", "lookup", "main"},
+		{"ip", "rule", "add", "priority", "112", "to", "192.168.0.0/16", "lookup", "main"},
 	}
 
 	for _, cmd := range cmds {
