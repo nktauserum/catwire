@@ -67,7 +67,7 @@ func (c *Client) Start() {
 				return
 			}
 
-			log.Printf("secret: %v\n", secret)
+			log.Println("The shared secret was computed!")
 
 			crypto, err := common.NewCrypto(secret)
 			if err != nil {
@@ -189,8 +189,6 @@ func (c *Client) listenTUN(tun *water.Interface) {
 			continue
 		}
 
-		log.Printf("Outgoing packet: to %v len(%v)\n", common.ExtractDestinationIP(buf[:n]), n)
-
 		encryptedData, err := c.crypto.Encrypt(buf[:n])
 		if err != nil {
 			log.Printf("listenTUN: encrypt: %v\n", err)
@@ -232,8 +230,6 @@ func (c *Client) listenUDP(conn net.Conn, tun *water.Interface) {
 		}
 
 		p := common.DecodePacket(buf[:n])
-
-		log.Printf("Incoming packet: len(%v)\n", n)
 
 		if p.Header.PacketType == common.DATA {
 			if c.crypto == nil {

@@ -16,7 +16,7 @@ import (
 	"github.com/nktauserum/catwire/common"
 )
 
-const ipAddr = "10.0.5.1"
+const ipAddr = "10.0.5.1" // as a server
 
 var nextSequenceNumber atomic.Uint64
 
@@ -87,8 +87,6 @@ func (s *Server) listenUDP() {
 
 		p := common.DecodePacket(buf[:n])
 
-		log.Printf("Incoming packet: from %v len(%v)\n", clientAddr, n)
-
 		if p.Header.PacketType == common.DATA && p.Header.PeerIndex != 0 {
 			session, err := s.IndexLookupTable.Load(p.Header.PeerIndex)
 			if err != nil {
@@ -100,8 +98,6 @@ func (s *Server) listenUDP() {
 
 			continue
 		}
-
-		log.Printf("Valid packet: %#v\n", p.Header)
 
 		// handshake
 		go func() {
@@ -132,7 +128,7 @@ func (s *Server) listenUDP() {
 					return
 				}
 
-				log.Printf("The shared secret was computed!\n")
+				log.Printf("The shared secret for %v was computed!\n", clientAddr)
 
 				session.crypto, err = common.NewCrypto(secret)
 				if err != nil {
@@ -149,8 +145,6 @@ func (s *Server) listenUDP() {
 				s.IPLookupTable.lookupTable[clientIP] = session
 				s.IPLookupTable.mu.Unlock()
 
-				println(session.peerIndex)
-
 				resp := common.Packet{
 					Header: common.Header{
 						PacketType: common.HANDSHAKE_INIT,
@@ -159,6 +153,7 @@ func (s *Server) listenUDP() {
 					},
 					Payload: s.serverPublicKey.Bytes(),
 				}
+				nextSequenceNumber.Add(1)
 
 				enc := common.EncodePacket(resp)
 
@@ -184,7 +179,6 @@ func (s *Session) Incoming(p common.Packet, remoteAddr *net.UDPAddr) {
 
 	decrypted, err := s.crypto.Decrypt(p.Payload)
 	if err != nil {
-		log.Printf("Error decrypt packet from %v len(%v): %v\n", remoteAddr.String(), len(p.Payload), err)
 		return
 	}
 
@@ -208,6 +202,7 @@ func (s *Session) Outgoing(data []byte) {
 		},
 		Payload: encrypted,
 	}
+	nextSequenceNumber.Add(1)
 
 	encoded := common.EncodePacket(p)
 	s.send(encoded) // directly to UDP
@@ -224,7 +219,6 @@ func (s *Server) listenTUN(tun *water.Interface) {
 		}
 
 		destIP := common.ExtractDestinationIP(buf[:n])
-		log.Printf("listenTUN: to %v len(%v)\n", destIP, n)
 
 		s.IPLookupTable.mu.RLock()
 		session := s.IPLookupTable.lookupTable[destIP]
@@ -241,7 +235,7 @@ func (s *Server) listenTUN(tun *water.Interface) {
 func sendTUN(tun *water.Interface, outgoing chan []byte) {
 	for data := range outgoing {
 		if _, err := tun.Write(data); err != nil {
-			log.Println("read: ", err)
+			log.Println("sendTUN: ", err)
 		}
 	}
 }
