@@ -30,13 +30,16 @@ type Packet struct {
 }
 
 func DecodePacket(data []byte) Packet {
+	payload := make([]byte, len(data) - HeaderSize)
+	copy(payload, data[HeaderSize:])
+
 	return Packet{
 		Header: Header{
 			PacketType: data[0],
 			PeerIndex:  binary.BigEndian.Uint64(data[1:9]),
 			Counter:    binary.BigEndian.Uint64(data[9:HeaderSize]),
 		},
-		Payload: data[HeaderSize:],
+		Payload: payload,
 	}
 }
 
