@@ -4,6 +4,7 @@ import (
 	"crypto/ecdh"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/binary"
 	"fmt"
 	"log"
 	"net"
@@ -58,13 +59,13 @@ func (pi *PeerIndices) Load(peerIndex uint64) (*Session, error) {
 }
 
 type PeerRouting struct {
-	lookupTable map[string]*Session
+	lookupTable map[uint32]*Session
 	mu          sync.RWMutex
 }
 
 type Server struct {
 	IndexLookupTable PeerIndices
-	AllowedIPs       map[string]string // TODO: use uint32 for IPv4 addr
+	AllowedIPs       map[string]uint32
 	IPLookupTable    PeerRouting
 
 	curve            ecdh.Curve
@@ -240,6 +241,12 @@ func sendTUN(tun *water.Interface, outgoing chan []byte) {
 	}
 }
 
+func ipAsInteger(s string) uint32 {
+	ip := net.ParseIP(s).To4()
+
+	return binary.BigEndian.Uint32(ip)
+}
+
 func main() {
 	c := water.Config{
 		DeviceType: water.TUN,
@@ -290,10 +297,10 @@ func main() {
 
 	outgoing := make(chan []byte)
 
-	allowedIPs := map[string]string{
-		"QdYN9vbo7o0kcquz5GltP+ZUUb7YMgmgngAQtkNbmRM=": "10.0.5.2",
-		"HDEVOmoAhSHHrYQB8wtAAduzvF4yOS91ST1TZ3i2Z04=": "10.0.5.3",
-		"w0EyAFT3/9wwSG5RVcuyPG+GB1wcdoRLyK9KmGHU0h0=": "10.0.5.4",
+	allowedIPs := map[string]uint32{
+		"QdYN9vbo7o0kcquz5GltP+ZUUb7YMgmgngAQtkNbmRM=": ipAsInteger("10.0.5.2"),
+		"HDEVOmoAhSHHrYQB8wtAAduzvF4yOS91ST1TZ3i2Z04=": ipAsInteger("10.0.5.3"),
+		"w0EyAFT3/9wwSG5RVcuyPG+GB1wcdoRLyK9KmGHU0h0=": ipAsInteger("10.0.5.4"),
 	}
 
 	s := Server{
@@ -305,7 +312,7 @@ func main() {
 		serverPublicKey:  serverPublicKey,
 
 		IPLookupTable: PeerRouting{
-			lookupTable: make(map[string]*Session),
+			lookupTable: make(map[uint32]*Session),
 		},
 		IndexLookupTable: PeerIndices{
 			lookupTable: make([]*Session, 0, len(allowedIPs)),

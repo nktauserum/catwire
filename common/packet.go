@@ -30,7 +30,7 @@ type Packet struct {
 }
 
 func DecodePacket(data []byte) Packet {
-	payload := make([]byte, len(data) - HeaderSize)
+	payload := make([]byte, len(data)-HeaderSize)
 	copy(payload, data[HeaderSize:])
 
 	return Packet{

@@ -1,15 +1,16 @@
 package common
 
 import (
+	"encoding/binary"
 	"net"
 )
 
-func ExtractDestinationIP(packet []byte) string {
+func ExtractDestinationIP(packet []byte) uint32 {
 	ip := net.IP(packet[16:20])
-	return ip.String()
+	return binary.BigEndian.Uint32(ip)
 }
 
-func ExtractSourceIP(packet []byte) string {
+func ExtractSourceIP(packet []byte) uint32 {
 	ip := net.IP(packet[12:16])
-	return ip.String()
+	return binary.BigEndian.Uint32(ip)
 }
