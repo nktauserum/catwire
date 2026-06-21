@@ -18,7 +18,9 @@ import (
 )
 
 const ipAddr = "10.0.5.1" // as a server
+const subnetMask = (0xFFFFFFFF << (32 - 24)) & 0xFFFFFFFF // 24 as CIDR notation
 
+var subnetAddr = getIPSubnet(ipAsInteger(ipAddr), subnetMask)
 var nextSequenceNumber atomic.Uint64
 
 type Session struct {
@@ -32,6 +34,9 @@ type Session struct {
 	remoteAddr atomic.Pointer[net.UDPAddr]
 	conn       *net.UDPConn
 	peerIndex  uint64
+
+	IPLookupTable    *PeerRouting
+
 }
 
 type PeerIndices struct {
@@ -146,6 +151,8 @@ func (s *Server) listenUDP() {
 				s.IPLookupTable.lookupTable[clientIP] = session
 				s.IPLookupTable.mu.Unlock()
 
+				session.IPLookupTable = &s.IPLookupTable
+
 				resp := common.Packet{
 					Header: common.Header{
 						PacketType: common.HANDSHAKE_INIT,
@@ -172,6 +179,14 @@ func (s *Session) send(data []byte) {
 	}
 }
 
+func getIPSubnet(ip uint32, mask uint32) uint32 {
+	return ip & mask
+}
+
+func IPInLocalSubnet(ip uint32) bool {
+	return getIPSubnet(ip, subnetMask) == subnetAddr	
+}
+
 func (s *Session) Incoming(p common.Packet, remoteAddr *net.UDPAddr) {
 	if p.Header.PeerIndex != s.peerIndex {
 		log.Printf("Invalid peerIndex: expected %v, got %v\n", s.peerIndex, p.Header.PeerIndex)
@@ -184,6 +199,22 @@ func (s *Session) Incoming(p common.Packet, remoteAddr *net.UDPAddr) {
 	}
 
 	go s.remoteAddr.Store(remoteAddr)
+
+	destIP := common.ExtractDestinationIP(decrypted)
+	if IPInLocalSubnet(destIP) && destIP != ipAsInteger(ipAddr) { // only if destIP owned by our virtual network and it isn't server's address (because it doesn't exist in IPLookupTable)
+		s.IPLookupTable.mu.RLock()
+		session := s.IPLookupTable.lookupTable[destIP]
+		s.IPLookupTable.mu.RUnlock()
+
+		if session == nil {
+			log.Printf("Send to a non-established connection\n")
+			return
+		}
+
+		go session.Outgoing(decrypted)
+
+		return
+	}
 
 	s.outgoing <- decrypted // to TUN
 }
