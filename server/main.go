@@ -18,7 +18,7 @@ import (
 )
 
 const ipAddr = "10.0.5.1" // as a server
-const subnetMask = (0xFFFFFFFF << (32 - 24)) & 0xFFFFFFFF // 24 as CIDR notation
+const subnetMask = (0xFFFFFFFF << (32 - 24)) & 0xFFFFFFFF // 24 as CIDR notation (0xFFFFFF00)
 
 var subnetAddr = getIPSubnet(ipAsInteger(ipAddr), subnetMask)
 var nextSequenceNumber atomic.Uint64
@@ -80,10 +80,99 @@ type Server struct {
 	outgoing chan []byte
 
 	conn *net.UDPConn
+	TUN *water.Interface
+}
+
+type Task struct {
+	Packet common.Packet
+	ClientAddr *net.UDPAddr 
 }
 
 func (s *Server) listenUDP() {
 	buf := make([]byte, 65535)
+	ch := make(chan *Task, 1024)
+
+	workersCount := 32
+
+	for range workersCount {
+		go func() {
+			for t := range ch {
+				if t.Packet.Header.PacketType == common.DATA && t.Packet.Header.PeerIndex != 0 {
+					session, err := s.IndexLookupTable.Load(t.Packet.Header.PeerIndex)
+					if err != nil {
+						log.Printf("Error loading session with index %v: %v\n", t.Packet.Header.PeerIndex, err)
+						continue
+					}
+
+					session.Incoming(t.Packet, t.ClientAddr)
+					continue
+				}
+
+				// handshake
+				if t.Packet.Header.PacketType != common.HANDSHAKE_INIT {
+					continue
+				}
+
+				key := base64.StdEncoding.EncodeToString(t.Packet.Payload)
+				clientIP, exists := s.AllowedIPs[key]
+				if exists {
+					session := &Session{
+						outgoing: s.outgoing,
+						conn:     s.conn,
+					}
+
+					session.remoteAddr.Store(t.ClientAddr)
+
+					var err error
+					session.clientPublicKey, err = s.curve.NewPublicKey(t.Packet.Payload)
+					if err != nil {
+						log.Printf("error creating new public key: %v\n", err)
+						continue
+					}
+
+					secret, err := s.serverPrivateKey.ECDH(session.clientPublicKey)
+					if err != nil {
+						log.Printf("error computing the secret: %v\n", err)
+						continue
+					}
+
+					log.Printf("The shared secret for %v was computed!\n", t.ClientAddr)
+
+					session.crypto, err = common.NewCrypto(secret)
+					if err != nil {
+						log.Printf("error creating crypto: %v\n", err)
+						continue
+					}
+
+					s.IndexLookupTable.mu.Lock()
+					session.peerIndex = uint64(len(s.IndexLookupTable.lookupTable)) + 1
+					s.IndexLookupTable.lookupTable = append(s.IndexLookupTable.lookupTable, session)
+					s.IndexLookupTable.mu.Unlock()
+
+					s.IPLookupTable.mu.Lock()
+					s.IPLookupTable.lookupTable[clientIP] = session
+					s.IPLookupTable.mu.Unlock()
+
+					session.IPLookupTable = &s.IPLookupTable
+
+					resp := common.Packet{
+						Header: common.Header{
+							PacketType: common.HANDSHAKE_INIT,
+							PeerIndex:  session.peerIndex,
+							Counter:    nextSequenceNumber.Add(1) - 1,
+						},
+						Payload: s.serverPublicKey.Bytes(),
+					}
+
+					enc := common.EncodePacket(resp)
+
+					session.send(enc) // вызываем внутреннюю функцию Session для отправки байтов сразу в UDP
+				}
+			}
+		}()
+	}
+
+
 	for {
 		n, clientAddr, err := s.conn.ReadFromUDP(buf)
 		if err != nil {
@@ -93,80 +182,7 @@ func (s *Server) listenUDP() {
 
 		p := common.DecodePacket(buf[:n])
 
-		if p.Header.PacketType == common.DATA && p.Header.PeerIndex != 0 {
-			session, err := s.IndexLookupTable.Load(p.Header.PeerIndex)
-			if err != nil {
-				log.Printf("Error loading session with index %v: %v\n", p.Header.PeerIndex, err)
-				continue
-			}
-
-			go session.Incoming(p, clientAddr)
-
-			continue
-		}
-
-		// handshake
-		go func() {
-			if p.Header.PacketType != common.HANDSHAKE_INIT {
-				return
-			}
-
-			key := base64.StdEncoding.EncodeToString(p.Payload)
-			clientIP, exists := s.AllowedIPs[key]
-			if exists {
-				session := &Session{
-					outgoing: s.outgoing,
-					conn:     s.conn,
-				}
-
-				session.remoteAddr.Store(clientAddr)
-
-				var err error
-				session.clientPublicKey, err = s.curve.NewPublicKey(p.Payload)
-				if err != nil {
-					log.Printf("error creating new public key: %v\n", err)
-					return
-				}
-
-				secret, err := s.serverPrivateKey.ECDH(session.clientPublicKey)
-				if err != nil {
-					log.Printf("error computing the secret: %v\n", err)
-					return
-				}
-
-				log.Printf("The shared secret for %v was computed!\n", clientAddr)
-
-				session.crypto, err = common.NewCrypto(secret)
-				if err != nil {
-					log.Printf("error creating crypto: %v\n", err)
-					return
-				}
-
-				s.IndexLookupTable.mu.Lock()
-				session.peerIndex = uint64(len(s.IndexLookupTable.lookupTable)) + 1
-				s.IndexLookupTable.lookupTable = append(s.IndexLookupTable.lookupTable, session)
-				s.IndexLookupTable.mu.Unlock()
-
-				s.IPLookupTable.mu.Lock()
-				s.IPLookupTable.lookupTable[clientIP] = session
-				s.IPLookupTable.mu.Unlock()
-
-				session.IPLookupTable = &s.IPLookupTable
-
-				resp := common.Packet{
-					Header: common.Header{
-						PacketType: common.HANDSHAKE_INIT,
-						PeerIndex:  session.peerIndex,
-						Counter:    nextSequenceNumber.Add(1) - 1,
-					},
-					Payload: s.serverPublicKey.Bytes(),
-				}
-
-				enc := common.EncodePacket(resp)
-
-				session.send(enc) // вызываем внутреннюю функцию Session для отправки байтов сразу в UDP
-			}
-		}()
+		ch <- &Task{Packet: p, ClientAddr: clientAddr}
 	}
 }
 
@@ -187,17 +203,12 @@ func IPInLocalSubnet(ip uint32) bool {
 }
 
 func (s *Session) Incoming(p common.Packet, remoteAddr *net.UDPAddr) {
-	if p.Header.PeerIndex != s.peerIndex {
-		log.Printf("Invalid peerIndex: expected %v, got %v\n", s.peerIndex, p.Header.PeerIndex)
-		return
-	}
-
 	decrypted, err := s.crypto.Decrypt(p.Payload)
 	if err != nil {
 		return
 	}
 
-	go s.remoteAddr.Store(remoteAddr)
+	s.remoteAddr.Store(remoteAddr)
 
 	destIP := common.ExtractDestinationIP(decrypted)
 	if IPInLocalSubnet(destIP) && destIP != ipAsInteger(ipAddr) { // only if destIP owned by our virtual network and it isn't server's address (because it doesn't exist in IPLookupTable)
@@ -348,6 +359,7 @@ func main() {
 			lookupTable: make([]*Session, 0, len(allowedIPs)),
 		},
 		AllowedIPs: allowedIPs,
+		TUN: tun,
 	}
 
 	go sendTUN(tun, outgoing)
