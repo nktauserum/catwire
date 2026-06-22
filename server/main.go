@@ -36,7 +36,6 @@ type Session struct {
 	peerIndex  uint64
 
 	IPLookupTable    *PeerRouting
-
 }
 
 type PeerIndices struct {
@@ -80,7 +79,6 @@ type Server struct {
 	outgoing chan []byte
 
 	conn *net.UDPConn
-	TUN *water.Interface
 }
 
 type Task struct {
@@ -380,7 +378,6 @@ func main() {
 			lookupTable: make([]*Session, 0, len(allowedIPs)),
 		},
 		AllowedIPs: allowedIPs,
-		TUN: tun,
 	}
 
 	go sendTUN(tun, outgoing)
