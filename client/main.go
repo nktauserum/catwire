@@ -123,6 +123,7 @@ func main() {
 	cmds := [][]string{
 		{"ip", "link", "set", tun.Name(), "up"},
 		{"ip", "addr", "add", config.PeerAddr + "/32", "dev", tun.Name()},
+		{"ip", "link", "set", "dev", tun.Name(), "mtu", "1420"},
 		{"ip", "route", "replace", "10.0.5.0/24", "dev", tun.Name()},
 
 		{"ip", "route", "add", "default", "dev", tun.Name(), "table", "100"},
@@ -150,7 +151,7 @@ func main() {
 		for _, cmd := range cmds {
 			out, err := exec.Command(cmd[0], cmd[1:]...).CombinedOutput()
 			if err != nil {
-				log.Fatalf("Failed to run %v: %v, output: %s", cmd, err, string(out))
+				log.Printf("Failed to run %v: %v, output: %s", cmd, err, string(out))
 			}
 		}
 	}()
@@ -177,8 +178,8 @@ func main() {
 
 	log.Printf("Dialing the connection to the server on %s\n", config.ServerAddr)
 
-	incoming := make(chan common.Packet)
-	outgoing := make(chan []byte)
+	incoming := make(chan common.Packet, 1024)
+	outgoing := make(chan []byte, 1024)
 
 	client := Client{
 
@@ -232,13 +233,12 @@ func (c *Client) listenTUN(tun *water.Interface) {
 			Header: common.Header{
 				PacketType: common.DATA,
 				PeerIndex:  c.peerIndex,
-				Counter:    nextSequenceNumber.Load(),
+				Counter:    nextSequenceNumber.Add(1) - 1,
 			},
 			Payload: encryptedData,
 		}
 
 		encodedPacket := common.EncodePacket(p)
-		nextSequenceNumber.Add(1)
 
 		c.outgoing <- encodedPacket
 	}

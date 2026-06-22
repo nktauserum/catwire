@@ -157,11 +157,10 @@ func (s *Server) listenUDP() {
 					Header: common.Header{
 						PacketType: common.HANDSHAKE_INIT,
 						PeerIndex:  session.peerIndex,
-						Counter:    nextSequenceNumber.Load(),
+						Counter:    nextSequenceNumber.Add(1) - 1,
 					},
 					Payload: s.serverPublicKey.Bytes(),
 				}
-				nextSequenceNumber.Add(1)
 
 				enc := common.EncodePacket(resp)
 
@@ -230,11 +229,10 @@ func (s *Session) Outgoing(data []byte) {
 		Header: common.Header{
 			PacketType: common.DATA,
 			PeerIndex:  s.peerIndex,
-			Counter:    nextSequenceNumber.Load(),
+			Counter:    nextSequenceNumber.Add(1) - 1,
 		},
 		Payload: encrypted,
 	}
-	nextSequenceNumber.Add(1)
 
 	encoded := common.EncodePacket(p)
 	s.send(encoded) // directly to UDP
@@ -294,6 +292,7 @@ func main() {
 	cmds := [][]string{
 		{"ip", "link", "set", tun.Name(), "up"},
 		{"ip", "addr", "add", ipAddr + "/24", "dev", tun.Name()},
+		{"ip", "link", "set", "dev", tun.Name(), "mtu", "1420"},
 		{"iptables", "-t", "nat", "-A", "POSTROUTING", "-o", "eth0", "-j", "MASQUERADE"},
 		{"iptables", "-A", "FORWARD", "-i", tun.Name(), "-j", "ACCEPT"},
 		{"iptables", "-A", "FORWARD", "-o", tun.Name(), "-j", "ACCEPT"},
@@ -326,7 +325,7 @@ func main() {
 	}
 	defer conn.Close()
 
-	outgoing := make(chan []byte)
+	outgoing := make(chan []byte, 1024)
 
 	allowedIPs := map[string]uint32{
 		"QdYN9vbo7o0kcquz5GltP+ZUUb7YMgmgngAQtkNbmRM=": ipAsInteger("10.0.5.2"),
