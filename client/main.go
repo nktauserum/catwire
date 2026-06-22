@@ -85,6 +85,10 @@ func (c *Client) Start() {
 			continue
 		}
 	}
+
+	for p := range c.incoming {
+		log.Printf("Unknown packet with type %v\n", p.Header.PacketType)
+	}
 }
 
 func main() {
