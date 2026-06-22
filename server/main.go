@@ -251,6 +251,33 @@ func (s *Session) Outgoing(data []byte) {
 
 func (s *Server) listenTUN(tun *water.Interface) {
 	buf := make([]byte, 65535)
+	pool := sync.Pool {
+		New: func() any {
+			b := make([]byte, 65535)
+			return &b
+		},
+	}
+	ch := make(chan *[]byte, 1024)
+
+	workersCount := 32
+	for range workersCount {
+		go func() {
+			for data := range ch {
+				destIP := common.ExtractDestinationIP(*data)
+
+				s.IPLookupTable.mu.RLock()
+				session := s.IPLookupTable.lookupTable[destIP]
+				s.IPLookupTable.mu.RUnlock()
+
+				if session == nil {
+					continue
+				}
+
+				session.Outgoing(*data)
+				pool.Put(data)
+			}
+		}()	
+	}
 
 	for {
 		n, err := tun.Read(buf)
@@ -258,18 +285,12 @@ func (s *Server) listenTUN(tun *water.Interface) {
 			log.Println("write: ", err)
 			continue
 		}
+		
+		data := pool.Get().(*[]byte)
+		*data = (*data)[:n]
+		copy(*data, buf[:n])
 
-		destIP := common.ExtractDestinationIP(buf[:n])
-
-		s.IPLookupTable.mu.RLock()
-		session := s.IPLookupTable.lookupTable[destIP]
-		s.IPLookupTable.mu.RUnlock()
-
-		if session == nil {
-			continue
-		}
-
-		session.Outgoing(buf[:n])
+		ch <- data
 	}
 }
 
