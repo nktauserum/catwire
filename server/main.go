@@ -17,7 +17,7 @@ import (
 	"github.com/nktauserum/catwire/common"
 )
 
-const ipAddr = "10.0.5.1" // as a server
+const ipAddr = "10.0.5.1"                                 // as a server
 const subnetMask = (0xFFFFFFFF << (32 - 24)) & 0xFFFFFFFF // 24 as CIDR notation (0xFFFFFF00)
 
 var subnetAddr = getIPSubnet(ipAsInteger(ipAddr), subnetMask)
@@ -35,7 +35,7 @@ type Session struct {
 	conn       *net.UDPConn
 	peerIndex  uint64
 
-	IPLookupTable    *PeerRouting
+	IPLookupTable *PeerRouting
 }
 
 type PeerIndices struct {
@@ -82,8 +82,8 @@ type Server struct {
 }
 
 type Task struct {
-	Packet common.Packet
-	ClientAddr *net.UDPAddr 
+	Packet     common.Packet
+	ClientAddr *net.UDPAddr
 }
 
 func (s *Server) listenUDP() {
@@ -170,7 +170,6 @@ func (s *Server) listenUDP() {
 		}()
 	}
 
-
 	for {
 		n, clientAddr, err := s.conn.ReadFromUDP(buf)
 		if err != nil {
@@ -197,11 +196,11 @@ func getIPSubnet(ip uint32, mask uint32) uint32 {
 }
 
 func IPInLocalSubnet(ip uint32) bool {
-	return getIPSubnet(ip, subnetMask) == subnetAddr	
+	return getIPSubnet(ip, subnetMask) == subnetAddr
 }
 
 func (s *Session) Incoming(p common.Packet, remoteAddr *net.UDPAddr) {
-	decrypted, err := s.crypto.Decrypt(p.Payload)
+	decrypted, err := s.crypto.Decrypt(p.Payload, p.Header.Counter)
 	if err != nil {
 		return
 	}
@@ -228,7 +227,9 @@ func (s *Session) Incoming(p common.Packet, remoteAddr *net.UDPAddr) {
 }
 
 func (s *Session) Outgoing(data []byte) {
-	encrypted, err := s.crypto.Encrypt(data)
+	counter := nextSequenceNumber.Add(1) - 1
+
+	encrypted, err := s.crypto.Encrypt(data, counter)
 	if err != nil {
 		log.Printf("Error encrypt packet: %v\n", err)
 		return
@@ -238,7 +239,7 @@ func (s *Session) Outgoing(data []byte) {
 		Header: common.Header{
 			PacketType: common.DATA,
 			PeerIndex:  s.peerIndex,
-			Counter:    nextSequenceNumber.Add(1) - 1,
+			Counter:    counter,
 		},
 		Payload: encrypted,
 	}
@@ -249,7 +250,7 @@ func (s *Session) Outgoing(data []byte) {
 
 func (s *Server) listenTUN(tun *water.Interface) {
 	buf := make([]byte, 65535)
-	pool := sync.Pool {
+	pool := sync.Pool{
 		New: func() any {
 			b := make([]byte, 65535)
 			return &b
@@ -274,7 +275,7 @@ func (s *Server) listenTUN(tun *water.Interface) {
 				session.Outgoing(*data)
 				pool.Put(data)
 			}
-		}()	
+		}()
 	}
 
 	for {
@@ -283,7 +284,7 @@ func (s *Server) listenTUN(tun *water.Interface) {
 			log.Println("write: ", err)
 			continue
 		}
-		
+
 		data := pool.Get().(*[]byte)
 		*data = (*data)[:n]
 		copy(*data, buf[:n])

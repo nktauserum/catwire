@@ -3,13 +3,18 @@ package common
 import (
 	"crypto/aes"
 	"crypto/cipher"
-	"crypto/rand"
 	"crypto/sha256"
-	"fmt"
+	"encoding/binary"
 	"io"
 
 	"golang.org/x/crypto/hkdf"
 )
+
+func makeNonce(counter uint64) [12]byte {
+	var nonce [12]byte
+	binary.BigEndian.PutUint64(nonce[4:], counter)
+	return nonce
+}
 
 type Crypto struct {
 	aesGCM cipher.AEAD
@@ -37,22 +42,12 @@ func NewCrypto(secret []byte) (*Crypto, error) {
 	return c, nil
 }
 
-func (c *Crypto) Encrypt(data []byte) ([]byte, error) {
-	nonce := make([]byte, c.aesGCM.NonceSize())
-	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
-		return nil, err
-	}
-
-	return c.aesGCM.Seal(nonce, nonce, data, nil), nil
+func (c *Crypto) Encrypt(data []byte, counter uint64) ([]byte, error) {
+	nonce := makeNonce(counter)
+	return c.aesGCM.Seal(nil, nonce[:], data, nil), nil
 }
 
-func (c *Crypto) Decrypt(data []byte) ([]byte, error) {
-	nonceSize := c.aesGCM.NonceSize()
-	if len(data) < nonceSize {
-		return nil, fmt.Errorf("ciphertext is too short")
-	}
-
-	nonce, d := data[:nonceSize], data[nonceSize:]
-
-	return c.aesGCM.Open(nil, nonce, d, nil)
+func (c *Crypto) Decrypt(data []byte, counter uint64) ([]byte, error) {
+	nonce := makeNonce(counter)
+	return c.aesGCM.Open(nil, nonce[:], data, nil)
 }

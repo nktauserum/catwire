@@ -227,7 +227,9 @@ func (c *Client) listenTUN(tun *water.Interface) {
 			continue
 		}
 
-		encryptedData, err := c.crypto.Encrypt(buf[:n])
+		counter := nextSequenceNumber.Add(1) - 1
+
+		encryptedData, err := c.crypto.Encrypt(buf[:n], counter)
 		if err != nil {
 			log.Printf("listenTUN: encrypt: %v\n", err)
 			continue
@@ -237,7 +239,7 @@ func (c *Client) listenTUN(tun *water.Interface) {
 			Header: common.Header{
 				PacketType: common.DATA,
 				PeerIndex:  c.peerIndex,
-				Counter:    nextSequenceNumber.Add(1) - 1,
+				Counter:    counter,
 			},
 			Payload: encryptedData,
 		}
@@ -271,7 +273,7 @@ func (c *Client) listenUDP(conn net.Conn, tun *water.Interface) {
 			if c.crypto == nil {
 				continue
 			}
-			decryptedData, err := c.crypto.Decrypt(p.Payload)
+			decryptedData, err := c.crypto.Decrypt(p.Payload, p.Header.Counter)
 			if err != nil {
 				log.Printf("listenUDP: decrypt: %v\n", err)
 				continue
