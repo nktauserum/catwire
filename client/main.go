@@ -267,7 +267,10 @@ func (c *Client) listenUDP(conn net.Conn, tun *water.Interface) {
 			continue
 		}
 
-		p := common.DecodePacket(buf[:n])
+		p, err := common.DecodePacket(buf[:n])
+		if err != nil {
+			continue
+		}
 
 		if p.Header.PacketType == common.DATA {
 			if c.crypto == nil {
