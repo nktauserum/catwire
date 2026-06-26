@@ -35,7 +35,10 @@ func TestReceiveNewPacket(t *testing.T) {
 		Counter:    0,
 	}
 	encodedPacket := EncodePacket(Packet{Payload: payload, Header: header})
-	packet := DecodePacket(encodedPacket)
+	packet, err := DecodePacket(encodedPacket)
+	if err != nil {
+		t.Fatalf("error decoding: %v\n", err)
+	}
 
 	assert.Equal(t, header.PacketType, packet.Header.PacketType, "PacketType don't match")
 	assert.Equal(t, header.PeerIndex, packet.Header.PeerIndex, "PeerIndex don't match")
