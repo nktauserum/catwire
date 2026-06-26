@@ -177,7 +177,10 @@ func (s *Server) listenUDP() {
 			continue
 		}
 
-		p := common.DecodePacket(buf[:n])
+		p, err := common.DecodePacket(buf[:n])
+		if err != nil {
+			continue
+		}
 
 		ch <- &Task{Packet: p, ClientAddr: clientAddr}
 	}

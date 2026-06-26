@@ -2,12 +2,15 @@ package common
 
 import (
 	"encoding/binary"
+	"fmt"
 )
 
 const (
 	DATA uint8 = iota
 	HANDSHAKE_INIT
 )
+
+var ErrTooShortPacket error = fmt.Errorf("the provided packet was smaller than 17 bytes")
 
 /*
 	Header - структура фиксированного размера, которая идёт в начале любого catwire-пакета.
@@ -29,7 +32,11 @@ type Packet struct {
 	Payload []byte
 }
 
-func DecodePacket(data []byte) Packet {
+func DecodePacket(data []byte) (Packet, error) {
+	if len(data) < 17 {
+		return Packet{}, ErrTooShortPacket
+	}
+
 	payload := make([]byte, len(data)-HeaderSize)
 	copy(payload, data[HeaderSize:])
 
@@ -40,7 +47,7 @@ func DecodePacket(data []byte) Packet {
 			Counter:    binary.BigEndian.Uint64(data[9:HeaderSize]),
 		},
 		Payload: payload,
-	}
+	}, nil
 }
 
 func EncodePacket(p Packet) []byte {
