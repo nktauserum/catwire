@@ -33,7 +33,7 @@ type Session struct {
 	remoteAddr atomic.Pointer[net.UDPAddr]
 	conn       *net.UDPConn
 	peerIndex  uint64
-	Counter atomic.Uint64
+	Counter    atomic.Uint64
 
 	IPLookupTable *PeerRouting
 }
