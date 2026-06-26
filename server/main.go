@@ -251,7 +251,7 @@ func (s *Session) Incoming(p common.Packet, remoteAddr *net.UDPAddr) {
 			return
 		}
 
-		go session.Outgoing(decrypted)
+		session.Outgoing(decrypted)
 
 		return
 	}
