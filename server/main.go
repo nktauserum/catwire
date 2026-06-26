@@ -21,7 +21,6 @@ const ipAddr = "10.0.5.1"                                 // as a server
 const subnetMask = (0xFFFFFFFF << (32 - 24)) & 0xFFFFFFFF // 24 as CIDR notation (0xFFFFFF00)
 
 var subnetAddr = getIPSubnet(ipAsInteger(ipAddr), subnetMask)
-var nextSequenceNumber atomic.Uint64
 
 type Session struct {
 	clientPublicKey *ecdh.PublicKey
@@ -34,6 +33,7 @@ type Session struct {
 	remoteAddr atomic.Pointer[net.UDPAddr]
 	conn       *net.UDPConn
 	peerIndex  uint64
+	Counter atomic.Uint64
 
 	IPLookupTable *PeerRouting
 }
@@ -187,7 +187,7 @@ func (s *Server) listenUDP() {
 						Header: common.Header{
 							PacketType: common.HANDSHAKE_INIT,
 							PeerIndex:  session.peerIndex,
-							Counter:    nextSequenceNumber.Add(1) - 1,
+							Counter:    session.Counter.Add(1) - 1,
 						},
 						Payload: s.serverPublicKey.Bytes(),
 					}
@@ -260,7 +260,7 @@ func (s *Session) Incoming(p common.Packet, remoteAddr *net.UDPAddr) {
 }
 
 func (s *Session) Outgoing(data []byte) {
-	counter := nextSequenceNumber.Add(1) - 1
+	counter := s.Counter.Add(1) - 1
 
 	encrypted, err := s.crypto.Encrypt(data, counter)
 	if err != nil {
