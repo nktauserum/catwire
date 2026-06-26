@@ -82,12 +82,18 @@ type Server struct {
 }
 
 type Task struct {
-	Packet     common.Packet
+	Data       *[]byte
 	ClientAddr *net.UDPAddr
 }
 
 func (s *Server) listenUDP() {
 	buf := make([]byte, 65535)
+	pool := sync.Pool{
+		New: func() any {
+			b := make([]byte, 65535)
+			return &b
+		},
+	}
 	ch := make(chan *Task, 1024)
 
 	workersCount := 32
@@ -95,23 +101,28 @@ func (s *Server) listenUDP() {
 	for range workersCount {
 		go func() {
 			for t := range ch {
-				if t.Packet.Header.PacketType == common.DATA && t.Packet.Header.PeerIndex != 0 {
-					session, err := s.IndexLookupTable.Load(t.Packet.Header.PeerIndex)
+				p, err := common.DecodePacket(*t.Data)
+				if err != nil {
+					continue
+				}
+
+				if p.Header.PacketType == common.DATA && p.Header.PeerIndex != 0 {
+					session, err := s.IndexLookupTable.Load(p.Header.PeerIndex)
 					if err != nil {
-						log.Printf("Error loading session with index %v: %v\n", t.Packet.Header.PeerIndex, err)
+						log.Printf("Error loading session with index %v: %v\n", p.Header.PeerIndex, err)
 						continue
 					}
 
-					session.Incoming(t.Packet, t.ClientAddr)
+					session.Incoming(p, t.ClientAddr)
 					continue
 				}
 
 				// handshake
-				if t.Packet.Header.PacketType != common.HANDSHAKE_INIT {
+				if p.Header.PacketType != common.HANDSHAKE_INIT {
 					continue
 				}
 
-				key := base64.StdEncoding.EncodeToString(t.Packet.Payload)
+				key := base64.StdEncoding.EncodeToString(p.Payload)
 				clientIP, exists := s.AllowedIPs[key]
 				if exists {
 					session := &Session{
@@ -122,7 +133,7 @@ func (s *Server) listenUDP() {
 					session.remoteAddr.Store(t.ClientAddr)
 
 					var err error
-					session.clientPublicKey, err = s.curve.NewPublicKey(t.Packet.Payload)
+					session.clientPublicKey, err = s.curve.NewPublicKey(p.Payload)
 					if err != nil {
 						log.Printf("error creating new public key: %v\n", err)
 						continue
@@ -165,6 +176,7 @@ func (s *Server) listenUDP() {
 					enc := common.EncodePacket(resp)
 
 					session.send(enc) // вызываем внутреннюю функцию Session для отправки байтов сразу в UDP
+					pool.Put(t.Data)
 				}
 			}
 		}()
@@ -177,12 +189,11 @@ func (s *Server) listenUDP() {
 			continue
 		}
 
-		p, err := common.DecodePacket(buf[:n])
-		if err != nil {
-			continue
-		}
+		data := pool.Get().(*[]byte)
+		*data = (*data)[:n]
+		copy(*data, buf[:n])
 
-		ch <- &Task{Packet: p, ClientAddr: clientAddr}
+		ch <- &Task{Data: data, ClientAddr: clientAddr}
 	}
 }
 

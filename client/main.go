@@ -261,13 +261,17 @@ func (c *Client) sendUDP(conn net.Conn) {
 
 func (c *Client) listenUDP(conn net.Conn, tun *water.Interface) {
 	buf := make([]byte, 65535)
+
 	for {
 		n, err := conn.Read(buf)
 		if err != nil {
 			continue
 		}
 
-		p, err := common.DecodePacket(buf[:n])
+		data := make([]byte, n)
+		copy(data, buf[:n])
+
+		p, err := common.DecodePacket(data)
 		if err != nil {
 			continue
 		}
