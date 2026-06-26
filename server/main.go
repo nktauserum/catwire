@@ -62,6 +62,28 @@ func (pi *PeerIndices) Load(peerIndex uint64) (*Session, error) {
 	return s, nil
 }
 
+func (pi *PeerIndices) Store(session *Session, key string) {
+	pi.mu.Lock()
+	defer pi.mu.Unlock()
+
+	// compare already existing and incoming sessions using the encoded private key
+	for i := range pi.lookupTable { // O(n) but acceptable for rare handshakes
+		k := base64.StdEncoding.EncodeToString(
+			pi.lookupTable[i].clientPublicKey.Bytes(),
+		)
+
+		if k == key {
+			session.peerIndex = uint64(i)
+			pi.lookupTable[i] = session
+			return
+		}
+	}
+
+	// if it doesn't exist, create a new entry
+	session.peerIndex = uint64(len(pi.lookupTable)) + 1
+	pi.lookupTable = append(pi.lookupTable, session)
+}
+
 type PeerRouting struct {
 	lookupTable map[uint32]*Session
 	mu          sync.RWMutex
@@ -153,10 +175,7 @@ func (s *Server) listenUDP() {
 						continue
 					}
 
-					s.IndexLookupTable.mu.Lock()
-					session.peerIndex = uint64(len(s.IndexLookupTable.lookupTable)) + 1
-					s.IndexLookupTable.lookupTable = append(s.IndexLookupTable.lookupTable, session)
-					s.IndexLookupTable.mu.Unlock()
+					s.IndexLookupTable.Store(session, key)
 
 					s.IPLookupTable.mu.Lock()
 					s.IPLookupTable.lookupTable[clientIP] = session
