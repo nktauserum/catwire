@@ -73,12 +73,13 @@ func (pi *PeerIndices) Store(session *Session, key string) {
 		)
 
 		if k == key {
-			session.peerIndex = uint64(i)
+			session.peerIndex = uint64(i+1)
 			pi.lookupTable[i] = session
 			return
 		}
 	}
 
+	
 	// if it doesn't exist, create a new entry
 	session.peerIndex = uint64(len(pi.lookupTable)) + 1
 	pi.lookupTable = append(pi.lookupTable, session)
