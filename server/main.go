@@ -2,19 +2,22 @@ package main
 
 import (
 	"crypto/ecdh"
-	"crypto/rand"
 	"encoding/base64"
 	"encoding/binary"
+	"flag"
 	"fmt"
 	"log"
 	"net"
+	"os"
 	"os/exec"
+	"strconv"
 	"sync"
 	"sync/atomic"
 
 	"github.com/songgao/water"
 
 	"github.com/nktauserum/catwire/common"
+	"github.com/nktauserum/catwire/server/config"
 )
 
 const ipAddr = "10.0.5.1"                                 // as a server
@@ -73,13 +76,12 @@ func (pi *PeerIndices) Store(session *Session, key string) {
 		)
 
 		if k == key {
-			session.peerIndex = uint64(i+1)
+			session.peerIndex = uint64(i + 1)
 			pi.lookupTable[i] = session
 			return
 		}
 	}
 
-	
 	// if it doesn't exist, create a new entry
 	session.peerIndex = uint64(len(pi.lookupTable)) + 1
 	pi.lookupTable = append(pi.lookupTable, session)
@@ -342,6 +344,20 @@ func ipAsInteger(s string) uint32 {
 }
 
 func main() {
+	var configPath string
+	flag.StringVar(&configPath, "config", "", "Path to config")
+	flag.Parse()
+
+	if configPath == "" {
+		fmt.Println("Please provide a relevant config. For more info see --help.")
+		os.Exit(1)
+	}
+
+	config, err := config.LoadConfig(configPath)
+	if err != nil {
+		log.Fatalf("error parsing config: %v\n", err)
+	}
+
 	c := water.Config{
 		DeviceType: water.TUN,
 		PlatformSpecificParams: water.PlatformSpecificParams{
@@ -373,13 +389,18 @@ func main() {
 
 	// init crypto
 	curve := ecdh.X25519()
-	serverPrivateKey, err := curve.GenerateKey(rand.Reader)
+	privKeyBytes, err := base64.StdEncoding.DecodeString(config.PrivateKey)
 	if err != nil {
-		log.Fatalf("error generating server private key: %v\n", err)
+		log.Fatalln("decode private key:", err)
+	}
+
+	serverPrivateKey, err := curve.NewPrivateKey(privKeyBytes)
+	if err != nil {
+		log.Fatalf("error generating client private key: %v\n", err)
 	}
 	serverPublicKey := serverPrivateKey.PublicKey()
 
-	addr, err := net.ResolveUDPAddr("udp", ":55635")
+	addr, err := net.ResolveUDPAddr("udp", ":"+strconv.Itoa(config.ListenPort))
 	if err != nil {
 		log.Fatalf("error resolving udp addr: %v\n", err)
 	}
@@ -392,10 +413,9 @@ func main() {
 
 	outgoing := make(chan []byte, 1024)
 
-	allowedIPs := map[string]uint32{
-		"QdYN9vbo7o0kcquz5GltP+ZUUb7YMgmgngAQtkNbmRM=": ipAsInteger("10.0.5.2"),
-		"HDEVOmoAhSHHrYQB8wtAAduzvF4yOS91ST1TZ3i2Z04=": ipAsInteger("10.0.5.3"),
-		"w0EyAFT3/9wwSG5RVcuyPG+GB1wcdoRLyK9KmGHU0h0=": ipAsInteger("10.0.5.4"),
+	allowedIPs := make(map[string]uint32)
+	for key, ip := range config.AllowedIPs {
+		allowedIPs[key] = ipAsInteger(ip)
 	}
 
 	s := Server{
@@ -418,7 +438,7 @@ func main() {
 	go sendTUN(tun, outgoing)
 	go s.listenTUN(tun)
 
-	log.Printf("Listening on :55635\n")
+	log.Printf("Listening on :%d\n", config.ListenPort)
 
 	s.listenUDP()
 }

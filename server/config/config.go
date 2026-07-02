@@ -6,9 +6,9 @@ import (
 )
 
 type Config struct {
-	PrivateKey string `json:"private_key"`
-	ServerAddr string `json:"server_addr"`
-	PeerAddr   string `json:"peer_addr"`
+	ListenPort int               `json:"listenPort"`
+	PrivateKey string            `json:"privateKey"`
+	AllowedIPs map[string]string `json:"allowedIPs"`
 }
 
 func LoadConfig(path string) (*Config, error) {
