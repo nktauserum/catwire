@@ -3,7 +3,6 @@ package main
 import (
 	"crypto/ecdh"
 	"encoding/base64"
-	"encoding/binary"
 	"flag"
 	"fmt"
 	"log"
@@ -12,90 +11,19 @@ import (
 	"os/exec"
 	"strconv"
 	"sync"
-	"sync/atomic"
-
-	"github.com/songgao/water"
 
 	"github.com/nktauserum/catwire/common"
 	"github.com/nktauserum/catwire/server/config"
+	"github.com/nktauserum/catwire/server/routing"
+	"github.com/songgao/water"
 )
 
-const ipAddr = "10.0.5.1"                                 // as a server
-const subnetMask = (0xFFFFFFFF << (32 - 24)) & 0xFFFFFFFF // 24 as CIDR notation (0xFFFFFF00)
-
-var subnetAddr = getIPSubnet(ipAsInteger(ipAddr), subnetMask)
-
-type Session struct {
-	clientPublicKey *ecdh.PublicKey
-	secret          []byte
-
-	outgoing chan []byte
-
-	crypto *common.Crypto
-
-	remoteAddr atomic.Pointer[net.UDPAddr]
-	conn       *net.UDPConn
-	peerIndex  uint64
-	Counter    atomic.Uint64
-
-	IPLookupTable *PeerRouting
-}
-
-type PeerIndices struct {
-	lookupTable []*Session
-	mu          sync.Mutex
-}
-
-func (pi *PeerIndices) Load(peerIndex uint64) (*Session, error) {
-	pi.mu.Lock()
-	defer pi.mu.Unlock()
-
-	p := peerIndex - 1
-
-	if p >= uint64(len(pi.lookupTable)) {
-		return nil, fmt.Errorf("no such peerIndex")
-	}
-
-	s := pi.lookupTable[p]
-
-	if s == nil {
-		return nil, fmt.Errorf("session equals nil")
-	}
-
-	return s, nil
-}
-
-func (pi *PeerIndices) Store(session *Session, key string) {
-	pi.mu.Lock()
-	defer pi.mu.Unlock()
-
-	// compare already existing and incoming sessions using the encoded private key
-	for i := range pi.lookupTable { // O(n) but acceptable for rare handshakes
-		k := base64.StdEncoding.EncodeToString(
-			pi.lookupTable[i].clientPublicKey.Bytes(),
-		)
-
-		if k == key {
-			session.peerIndex = uint64(i + 1)
-			pi.lookupTable[i] = session
-			return
-		}
-	}
-
-	// if it doesn't exist, create a new entry
-	session.peerIndex = uint64(len(pi.lookupTable)) + 1
-	pi.lookupTable = append(pi.lookupTable, session)
-}
-
-type PeerRouting struct {
-	lookupTable map[uint32]*Session
-	mu          sync.RWMutex
-}
+const ipAddr = "10.0.5.1"
 
 type Server struct {
-	IndexLookupTable PeerIndices
+	IndexLookupTable routing.PeerIndices
 	AllowedIPs       map[string]uint32
-	IPLookupTable    PeerRouting
+	IPLookupTable    routing.PeerRouting
 
 	curve            ecdh.Curve
 	serverPrivateKey *ecdh.PrivateKey
@@ -111,7 +39,7 @@ type Task struct {
 	ClientAddr *net.UDPAddr
 }
 
-func (s *Server) listenUDP() {
+func (server *Server) listenUDP() {
 	buf := make([]byte, 65535)
 	pool := sync.Pool{
 		New: func() any {
@@ -132,7 +60,7 @@ func (s *Server) listenUDP() {
 				}
 
 				if p.Header.PacketType == common.DATA && p.Header.PeerIndex != 0 {
-					session, err := s.IndexLookupTable.Load(p.Header.PeerIndex)
+					session, err := server.IndexLookupTable.Load(p.Header.PeerIndex)
 					if err != nil {
 						log.Printf("Error loading session with index %v: %v\n", p.Header.PeerIndex, err)
 						continue
@@ -148,23 +76,18 @@ func (s *Server) listenUDP() {
 				}
 
 				key := base64.StdEncoding.EncodeToString(p.Payload)
-				clientIP, exists := s.AllowedIPs[key]
+				clientIP, exists := server.AllowedIPs[key]
 				if exists {
-					session := &Session{
-						outgoing: s.outgoing,
-						conn:     s.conn,
-					}
-
-					session.remoteAddr.Store(t.ClientAddr)
+					s := routing.NewSession(server.outgoing, server.conn, t.ClientAddr, &server.IPLookupTable)
 
 					var err error
-					session.clientPublicKey, err = s.curve.NewPublicKey(p.Payload)
+					clientPublicKey, err := server.curve.NewPublicKey(p.Payload)
 					if err != nil {
 						log.Printf("error creating new public key: %v\n", err)
 						continue
 					}
 
-					secret, err := s.serverPrivateKey.ECDH(session.clientPublicKey)
+					secret, err := server.serverPrivateKey.ECDH(clientPublicKey)
 					if err != nil {
 						log.Printf("error computing the secret: %v\n", err)
 						continue
@@ -172,32 +95,29 @@ func (s *Server) listenUDP() {
 
 					log.Printf("The shared secret for %v was computed!\n", t.ClientAddr)
 
-					session.crypto, err = common.NewCrypto(secret)
+					crypto, err := common.NewCrypto(secret)
 					if err != nil {
 						log.Printf("error creating crypto: %v\n", err)
 						continue
 					}
 
-					s.IndexLookupTable.Store(session, key)
+					idx := server.IndexLookupTable.Store(key, s)
+					server.IPLookupTable.Store(clientIP, s)
 
-					s.IPLookupTable.mu.Lock()
-					s.IPLookupTable.lookupTable[clientIP] = session
-					s.IPLookupTable.mu.Unlock()
-
-					session.IPLookupTable = &s.IPLookupTable
+					s.InitSession(idx, clientPublicKey, crypto)
 
 					resp := common.Packet{
 						Header: common.Header{
 							PacketType: common.HANDSHAKE_INIT,
-							PeerIndex:  session.peerIndex,
-							Counter:    session.Counter.Add(1) - 1,
+							PeerIndex:  idx,
+							Counter:    s.Counter.Add(1) - 1,
 						},
-						Payload: s.serverPublicKey.Bytes(),
+						Payload: server.serverPublicKey.Bytes(),
 					}
 
 					enc := common.EncodePacket(resp)
 
-					session.send(enc) // вызываем внутреннюю функцию Session для отправки байтов сразу в UDP
+					s.Send(enc) // вызываем внутреннюю функцию Session для отправки байтов сразу в UDP
 					pool.Put(t.Data)
 				}
 			}
@@ -205,7 +125,7 @@ func (s *Server) listenUDP() {
 	}
 
 	for {
-		n, clientAddr, err := s.conn.ReadFromUDP(buf)
+		n, clientAddr, err := server.conn.ReadFromUDP(buf)
 		if err != nil {
 			log.Println("read: ", err)
 			continue
@@ -219,72 +139,7 @@ func (s *Server) listenUDP() {
 	}
 }
 
-func (s *Session) send(data []byte) {
-	if clientAddr := s.remoteAddr.Load(); clientAddr != nil {
-		if _, err := s.conn.WriteToUDP(data, clientAddr); err != nil {
-			log.Println("write: ", err)
-		}
-	}
-}
-
-func getIPSubnet(ip uint32, mask uint32) uint32 {
-	return ip & mask
-}
-
-func IPInLocalSubnet(ip uint32) bool {
-	return getIPSubnet(ip, subnetMask) == subnetAddr
-}
-
-func (s *Session) Incoming(p common.Packet, remoteAddr *net.UDPAddr) {
-	decrypted, err := s.crypto.Decrypt(p.Payload, p.Header.Counter)
-	if err != nil {
-		return
-	}
-
-	s.remoteAddr.Store(remoteAddr)
-
-	destIP := common.ExtractDestinationIP(decrypted)
-	if IPInLocalSubnet(destIP) && destIP != ipAsInteger(ipAddr) { // only if destIP owned by our virtual network and it isn't server's address (because it doesn't exist in IPLookupTable)
-		s.IPLookupTable.mu.RLock()
-		session := s.IPLookupTable.lookupTable[destIP]
-		s.IPLookupTable.mu.RUnlock()
-
-		if session == nil {
-			log.Printf("Send to a non-established connection\n")
-			return
-		}
-
-		session.Outgoing(decrypted)
-
-		return
-	}
-
-	s.outgoing <- decrypted // to TUN
-}
-
-func (s *Session) Outgoing(data []byte) {
-	counter := s.Counter.Add(1) - 1
-
-	encrypted, err := s.crypto.Encrypt(data, counter)
-	if err != nil {
-		log.Printf("Error encrypt packet: %v\n", err)
-		return
-	}
-
-	p := common.Packet{
-		Header: common.Header{
-			PacketType: common.DATA,
-			PeerIndex:  s.peerIndex,
-			Counter:    counter,
-		},
-		Payload: encrypted,
-	}
-
-	encoded := common.EncodePacket(p)
-	s.send(encoded) // directly to UDP
-}
-
-func (s *Server) listenTUN(tun *water.Interface) {
+func (server *Server) listenTUN(tun *water.Interface) {
 	buf := make([]byte, 65535)
 	pool := sync.Pool{
 		New: func() any {
@@ -299,10 +154,7 @@ func (s *Server) listenTUN(tun *water.Interface) {
 		go func() {
 			for data := range ch {
 				destIP := common.ExtractDestinationIP(*data)
-
-				s.IPLookupTable.mu.RLock()
-				session := s.IPLookupTable.lookupTable[destIP]
-				s.IPLookupTable.mu.RUnlock()
+				session := server.IPLookupTable.Load(destIP)
 
 				if session == nil {
 					continue
@@ -335,12 +187,6 @@ func sendTUN(tun *water.Interface, outgoing chan []byte) {
 			log.Println("sendTUN: ", err)
 		}
 	}
-}
-
-func ipAsInteger(s string) uint32 {
-	ip := net.ParseIP(s).To4()
-
-	return binary.BigEndian.Uint32(ip)
 }
 
 func main() {
@@ -415,7 +261,7 @@ func main() {
 
 	allowedIPs := make(map[string]uint32)
 	for key, ip := range config.AllowedIPs {
-		allowedIPs[key] = ipAsInteger(ip)
+		allowedIPs[key] = common.IpAsInteger(ip)
 	}
 
 	s := Server{
@@ -426,13 +272,9 @@ func main() {
 		serverPrivateKey: serverPrivateKey,
 		serverPublicKey:  serverPublicKey,
 
-		IPLookupTable: PeerRouting{
-			lookupTable: make(map[uint32]*Session),
-		},
-		IndexLookupTable: PeerIndices{
-			lookupTable: make([]*Session, 0, len(allowedIPs)),
-		},
-		AllowedIPs: allowedIPs,
+		IPLookupTable:    routing.NewPeerRouting(),
+		IndexLookupTable: routing.NewPeerIndices(len(allowedIPs)),
+		AllowedIPs:       allowedIPs,
 	}
 
 	go sendTUN(tun, outgoing)
