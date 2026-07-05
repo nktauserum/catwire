@@ -1,0 +1,8 @@
+{
+    "listenPort": 55247,
+    "privateKey": "<your_server_private_key>",
+    "allowedIPs": { 
+		"<public_key_of_client_1": "10.0.5.2",
+		"<public_key_of_client_2": "10.0.5.3"
+    }
+}
