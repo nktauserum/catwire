@@ -1,0 +1,5 @@
+{
+    "private_key": "<private_key_of_client_1>",
+    "server_addr": "12.5.4.3:55247",
+    "peer_addr": "10.0.5.2"
+}
