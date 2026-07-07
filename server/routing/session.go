@@ -12,7 +12,7 @@ import (
 const ipAddr = "10.0.5.1"                                 // as a server
 const subnetMask = (0xFFFFFFFF << (32 - 24)) & 0xFFFFFFFF // 24 as CIDR notation (0xFFFFFF00)
 
-var subnetAddr = getIPSubnet(common.IpAsInteger(ipAddr), subnetMask)
+var subnetAddr = getIPSubnet(common.IPAsInteger(ipAddr), subnetMask)
 
 type Session struct {
 	PublicKey *ecdh.PublicKey
@@ -81,7 +81,7 @@ func (s *Session) Incoming(p common.Packet, remoteAddr *net.UDPAddr) {
 	s.remoteAddr.Store(remoteAddr)
 
 	destIP := common.ExtractDestinationIP(decrypted)
-	if IPInLocalSubnet(destIP) && destIP != common.IpAsInteger(ipAddr) { // only if destIP owned by our virtual network and it isn't server's address (because it doesn't exist in IPLookupTable)
+	if IPInLocalSubnet(destIP) && destIP != common.IPAsInteger(ipAddr) { // only if destIP owned by our virtual network and it isn't server's address (because it doesn't exist in IPLookupTable)
 		session := s.IPLookupTable.Load(destIP)
 
 		if session == nil {

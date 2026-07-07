@@ -269,7 +269,7 @@ func main() {
 
 	allowedIPs := make(map[string]uint32)
 	for key, ip := range config.AllowedIPs {
-		allowedIPs[key] = common.IpAsInteger(ip)
+		allowedIPs[key] = common.IPAsInteger(ip)
 	}
 
 	s := Server{
