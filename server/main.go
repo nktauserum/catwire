@@ -62,7 +62,6 @@ func (server *Server) listenUDP() {
 				if p.Header.PacketType == common.DATA && p.Header.PeerIndex != 0 {
 					session, err := server.IndexLookupTable.Load(p.Header.PeerIndex)
 					if err != nil {
-						log.Printf("Error loading session with index %v: %v\n", p.Header.PeerIndex, err)
 						continue
 					}
 
