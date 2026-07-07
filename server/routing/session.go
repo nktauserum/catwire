@@ -17,17 +17,15 @@ var subnetAddr = getIPSubnet(common.IPAsInteger(ipAddr), subnetMask)
 type Session struct {
 	PublicKey *ecdh.PublicKey
 	secret    []byte
-
-	outgoing chan []byte
-
 	crypto *common.Crypto
-
-	remoteAddr atomic.Pointer[net.UDPAddr]
-	conn       *net.UDPConn
-	PeerIndex  uint64
 	Counter    atomic.Uint64
 
+	outgoing chan []byte
+	remoteAddr atomic.Pointer[net.UDPAddr]
+	conn       *net.UDPConn
+
 	IPLookupTable *PeerRouting
+	PeerIndex  uint64
 }
 
 func NewSession(
