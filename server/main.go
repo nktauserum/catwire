@@ -56,21 +56,25 @@ func (server *Server) listenUDP() {
 			for t := range ch {
 				p, err := common.DecodePacket(*t.Data)
 				if err != nil {
+					pool.Put(t.Data)
 					continue
 				}
 
 				if p.Header.PacketType == common.DATA && p.Header.PeerIndex != 0 {
 					session, err := server.IndexLookupTable.Load(p.Header.PeerIndex)
 					if err != nil {
+						pool.Put(t.Data)
 						continue
 					}
 
 					session.Incoming(p, t.ClientAddr)
+					pool.Put(t.Data)
 					continue
 				}
 
 				// handshake
 				if p.Header.PacketType != common.HANDSHAKE_INIT {
+					pool.Put(t.Data)
 					continue
 				}
 
@@ -83,12 +87,14 @@ func (server *Server) listenUDP() {
 					clientPublicKey, err := server.curve.NewPublicKey(p.Payload)
 					if err != nil {
 						log.Printf("error creating new public key: %v\n", err)
+						pool.Put(t.Data)
 						continue
 					}
 
 					secret, err := server.serverPrivateKey.ECDH(clientPublicKey)
 					if err != nil {
 						log.Printf("error computing the secret: %v\n", err)
+						pool.Put(t.Data)
 						continue
 					}
 
@@ -97,6 +103,7 @@ func (server *Server) listenUDP() {
 					crypto, err := common.NewCrypto(secret)
 					if err != nil {
 						log.Printf("error creating crypto: %v\n", err)
+						pool.Put(t.Data)
 						continue
 					}
 
@@ -117,8 +124,9 @@ func (server *Server) listenUDP() {
 					enc := common.EncodePacket(resp)
 
 					s.Send(enc) // вызываем внутреннюю функцию Session для отправки байтов сразу в UDP
-					pool.Put(t.Data)
 				}
+
+				pool.Put(t.Data)
 			}
 		}()
 	}
@@ -156,6 +164,7 @@ func (server *Server) listenTUN(tun *water.Interface) {
 				session := server.IPLookupTable.Load(destIP)
 
 				if session == nil {
+					pool.Put(data)
 					continue
 				}
 
