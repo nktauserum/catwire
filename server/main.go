@@ -39,6 +39,17 @@ type Task struct {
 	ClientAddr *net.UDPAddr
 }
 
+const subnetMask = (0xFFFFFFFF << (32 - 24)) & 0xFFFFFFFF // 24 as CIDR notation (0xFFFFFF00)
+var subnetAddr = getIPSubnet(common.IPAsInteger(ipAddr), subnetMask)
+
+func getIPSubnet(ip uint32, mask uint32) uint32 {
+	return ip & mask
+}
+
+func IPInLocalSubnet(ip uint32) bool {
+	return getIPSubnet(ip, subnetMask) == subnetAddr
+}
+
 func (server *Server) listenUDP() {
 	buf := make([]byte, 65535)
 	pool := sync.Pool{
@@ -67,7 +78,26 @@ func (server *Server) listenUDP() {
 						continue
 					}
 
-					session.Incoming(p, t.ClientAddr)
+					payload, err := session.Incoming(p, t.ClientAddr)
+					if err != nil {
+						pool.Put(t.Data)
+						continue
+					}
+
+					destIP := common.ExtractDestinationIP(payload)
+					if IPInLocalSubnet(destIP) && destIP != common.IPAsInteger(ipAddr) { // only if destIP owned by our virtual network and it isn't server's address (because it doesn't exist in IPLookupTable)
+						session := server.IPLookupTable.Load(destIP)
+						if session == nil {
+							pool.Put(t.Data)
+							continue
+						}
+
+						session.Outgoing(payload)
+						pool.Put(t.Data)
+						continue
+					}
+
+					server.outgoing <- payload
 					pool.Put(t.Data)
 					continue
 				}
@@ -81,7 +111,7 @@ func (server *Server) listenUDP() {
 				key := base64.StdEncoding.EncodeToString(p.Payload)
 				clientIP, exists := server.AllowedIPs[key]
 				if exists {
-					s := routing.NewSession(server.outgoing, server.conn, t.ClientAddr, &server.IPLookupTable)
+					s := routing.NewSession(server.conn, t.ClientAddr)
 
 					var err error
 					clientPublicKey, err := server.curve.NewPublicKey(p.Payload)

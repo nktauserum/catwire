@@ -9,35 +9,24 @@ import (
 	"github.com/nktauserum/catwire/common"
 )
 
-const ipAddr = "10.0.5.1"                                 // as a server
-const subnetMask = (0xFFFFFFFF << (32 - 24)) & 0xFFFFFFFF // 24 as CIDR notation (0xFFFFFF00)
-
-var subnetAddr = getIPSubnet(common.IPAsInteger(ipAddr), subnetMask)
-
 type Session struct {
 	PublicKey *ecdh.PublicKey
 	secret    []byte
 	crypto    *common.Crypto
 	Counter   atomic.Uint64
 
-	outgoing   chan []byte
 	remoteAddr atomic.Pointer[net.UDPAddr]
 	conn       *net.UDPConn
 
-	IPLookupTable *PeerRouting
-	PeerIndex     uint64
+	PeerIndex uint64
 }
 
 func NewSession(
-	outgoing chan []byte,
 	conn *net.UDPConn,
 	addr *net.UDPAddr,
-	table *PeerRouting,
 ) *Session {
 	s := &Session{
-		outgoing:      outgoing,
-		conn:          conn,
-		IPLookupTable: table,
+		conn: conn,
 	}
 
 	s.remoteAddr.Store(addr)
@@ -62,37 +51,15 @@ func (s *Session) Send(data []byte) {
 	}
 }
 
-func getIPSubnet(ip uint32, mask uint32) uint32 {
-	return ip & mask
-}
-
-func IPInLocalSubnet(ip uint32) bool {
-	return getIPSubnet(ip, subnetMask) == subnetAddr
-}
-
-func (s *Session) Incoming(p common.Packet, remoteAddr *net.UDPAddr) {
+func (s *Session) Incoming(p common.Packet, remoteAddr *net.UDPAddr) ([]byte, error) {
 	decrypted, err := s.crypto.Decrypt(p.Payload, p.Header.Counter)
 	if err != nil {
-		return
+		return nil, err
 	}
 
 	s.remoteAddr.Store(remoteAddr)
 
-	destIP := common.ExtractDestinationIP(decrypted)
-	if IPInLocalSubnet(destIP) && destIP != common.IPAsInteger(ipAddr) { // only if destIP owned by our virtual network and it isn't server's address (because it doesn't exist in IPLookupTable)
-		session := s.IPLookupTable.Load(destIP)
-
-		if session == nil {
-			log.Printf("Send to a non-established connection\n")
-			return
-		}
-
-		session.Outgoing(decrypted)
-
-		return
-	}
-
-	s.outgoing <- decrypted // to TUN
+	return decrypted, nil
 }
 
 func (s *Session) Outgoing(data []byte) {
