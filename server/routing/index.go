@@ -4,20 +4,22 @@ import (
 	"encoding/base64"
 	"fmt"
 	"sync"
+
+	"github.com/nktauserum/catwire/server/session"
 )
 
 type PeerIndices struct {
-	lookupTable []*Session
+	lookupTable []*session.Session
 	mu          sync.Mutex
 }
 
 func NewPeerIndices(cap int) PeerIndices {
 	return PeerIndices{
-		lookupTable: make([]*Session, 0, cap),
+		lookupTable: make([]*session.Session, 0, cap),
 	}
 }
 
-func (pi *PeerIndices) Load(peerIndex uint64) (*Session, error) {
+func (pi *PeerIndices) Load(peerIndex uint64) (*session.Session, error) {
 	pi.mu.Lock()
 	defer pi.mu.Unlock()
 
@@ -36,7 +38,7 @@ func (pi *PeerIndices) Load(peerIndex uint64) (*Session, error) {
 	return s, nil
 }
 
-func (pi *PeerIndices) Store(key string, session *Session) uint64 {
+func (pi *PeerIndices) Store(key string, session *session.Session) uint64 {
 	pi.mu.Lock()
 	defer pi.mu.Unlock()
 
