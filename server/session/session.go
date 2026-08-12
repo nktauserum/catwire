@@ -1,4 +1,4 @@
-package routing
+package session
 
 import (
 	"crypto/ecdh"

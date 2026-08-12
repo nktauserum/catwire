@@ -15,6 +15,7 @@ import (
 	"github.com/nktauserum/catwire/common"
 	"github.com/nktauserum/catwire/server/config"
 	"github.com/nktauserum/catwire/server/routing"
+	"github.com/nktauserum/catwire/server/session"
 	"github.com/songgao/water"
 )
 
@@ -111,7 +112,7 @@ func (server *Server) listenUDP() {
 				key := base64.StdEncoding.EncodeToString(p.Payload)
 				clientIP, exists := server.AllowedIPs[key]
 				if exists {
-					s := routing.NewSession(server.conn, t.ClientAddr)
+					s := session.NewSession(server.conn, t.ClientAddr)
 
 					var err error
 					clientPublicKey, err := server.curve.NewPublicKey(p.Payload)
