@@ -29,7 +29,7 @@ type Client struct {
 
 	crypto    *common.Crypto
 	peerIndex uint64
-	counter atomic.Uint64
+	counter   atomic.Uint64
 }
 
 func (c *Client) Start() {
@@ -304,4 +304,3 @@ func main() {
 	println()
 	log.Printf("Graceful shutdown\n")
 }
-

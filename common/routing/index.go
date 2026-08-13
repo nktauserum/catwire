@@ -8,28 +8,28 @@ import (
 	"github.com/nktauserum/catwire/common/session"
 )
 
-type PeerIndices struct {
+type IndexTable struct {
 	lookupTable []*session.Session
 	mu          sync.Mutex
 }
 
-func NewPeerIndices(cap int) PeerIndices {
-	return PeerIndices{
+func NewIndexTable(cap int) IndexTable {
+	return IndexTable{
 		lookupTable: make([]*session.Session, 0, cap),
 	}
 }
 
-func (pi *PeerIndices) Load(peerIndex uint64) (*session.Session, error) {
-	pi.mu.Lock()
-	defer pi.mu.Unlock()
+func (t *IndexTable) Load(peerIndex uint64) (*session.Session, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 
 	p := peerIndex - 1
 
-	if p >= uint64(len(pi.lookupTable)) {
+	if p >= uint64(len(t.lookupTable)) {
 		return nil, fmt.Errorf("no such peerIndex")
 	}
 
-	s := pi.lookupTable[p]
+	s := t.lookupTable[p]
 
 	if s == nil {
 		return nil, fmt.Errorf("equals nil")
@@ -38,27 +38,27 @@ func (pi *PeerIndices) Load(peerIndex uint64) (*session.Session, error) {
 	return s, nil
 }
 
-func (pi *PeerIndices) Store(key string, session *session.Session) uint64 {
-	pi.mu.Lock()
-	defer pi.mu.Unlock()
+func (t *IndexTable) Store(key string, session *session.Session) uint64 {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 
 	// compare already existing and incoming  using the encoded private key
-	for i := range pi.lookupTable { // O(n) but acceptable for rare handshakes
+	for i := range t.lookupTable { // O(n) but acceptable for rare handshakes
 		k := base64.StdEncoding.EncodeToString(
-			pi.lookupTable[i].PublicKey.Bytes(),
+			t.lookupTable[i].PublicKey.Bytes(),
 		)
 
 		if k == key {
 			idx := uint64(i + 1)
-			pi.lookupTable[i] = session
+			t.lookupTable[i] = session
 
 			return idx
 		}
 	}
 
 	// if it doesn't exist, create a new entry
-	idx := uint64(len(pi.lookupTable)) + 1
-	pi.lookupTable = append(pi.lookupTable, session)
+	idx := uint64(len(t.lookupTable)) + 1
+	t.lookupTable = append(t.lookupTable, session)
 
 	return idx
 }
