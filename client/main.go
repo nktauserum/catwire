@@ -90,6 +90,88 @@ func (c *Client) Start() {
 	}
 }
 
+func (c *Client) listenTUN(tun *water.Interface) {
+	buf := make([]byte, 65535)
+
+	for {
+		n, err := tun.Read(buf)
+		if err != nil {
+			continue
+		}
+
+		if c.crypto == nil {
+			continue
+		}
+
+		counter := c.counter.Add(1) - 1
+
+		encryptedData, err := c.crypto.Encrypt(buf[:n], counter)
+		if err != nil {
+			log.Printf("listenTUN: encrypt: %v\n", err)
+			continue
+		}
+
+		p := common.Packet{
+			Header: common.Header{
+				PacketType: common.DATA,
+				PeerIndex:  c.peerIndex,
+				Counter:    counter,
+			},
+			Payload: encryptedData,
+		}
+
+		encodedPacket := common.EncodePacket(p)
+
+		c.outgoing <- encodedPacket
+	}
+}
+
+func (c *Client) sendUDP(conn net.Conn) {
+	for packet := range c.outgoing {
+		if _, err := conn.Write(packet); err != nil {
+			log.Printf("write: %v", err)
+			continue
+		}
+	}
+}
+
+func (c *Client) listenUDP(conn net.Conn, tun *water.Interface) {
+	buf := make([]byte, 65535)
+
+	for {
+		n, err := conn.Read(buf)
+		if err != nil {
+			continue
+		}
+
+		data := make([]byte, n)
+		copy(data, buf[:n])
+
+		p, err := common.DecodePacket(data)
+		if err != nil {
+			continue
+		}
+
+		if p.Header.PacketType == common.DATA {
+			if c.crypto == nil {
+				continue
+			}
+			decryptedData, err := c.crypto.Decrypt(p.Payload, p.Header.Counter)
+			if err != nil {
+				log.Printf("listenUDP: decrypt: %v\n", err)
+				continue
+			}
+
+			if _, err = tun.Write(decryptedData); err != nil {
+				log.Printf("error writing to TUN: %v\n", err)
+			}
+			continue
+		}
+
+		c.incoming <- p
+	}
+}
+
 func main() {
 	var configPath string
 	flag.StringVar(&configPath, "config", "", "Path to config")
@@ -223,84 +305,3 @@ func main() {
 	log.Printf("Graceful shutdown\n")
 }
 
-func (c *Client) listenTUN(tun *water.Interface) {
-	buf := make([]byte, 65535)
-
-	for {
-		n, err := tun.Read(buf)
-		if err != nil {
-			continue
-		}
-
-		if c.crypto == nil {
-			continue
-		}
-
-		counter := c.counter.Add(1) - 1
-
-		encryptedData, err := c.crypto.Encrypt(buf[:n], counter)
-		if err != nil {
-			log.Printf("listenTUN: encrypt: %v\n", err)
-			continue
-		}
-
-		p := common.Packet{
-			Header: common.Header{
-				PacketType: common.DATA,
-				PeerIndex:  c.peerIndex,
-				Counter:    counter,
-			},
-			Payload: encryptedData,
-		}
-
-		encodedPacket := common.EncodePacket(p)
-
-		c.outgoing <- encodedPacket
-	}
-}
-
-func (c *Client) sendUDP(conn net.Conn) {
-	for packet := range c.outgoing {
-		if _, err := conn.Write(packet); err != nil {
-			log.Printf("write: %v", err)
-			continue
-		}
-	}
-}
-
-func (c *Client) listenUDP(conn net.Conn, tun *water.Interface) {
-	buf := make([]byte, 65535)
-
-	for {
-		n, err := conn.Read(buf)
-		if err != nil {
-			continue
-		}
-
-		data := make([]byte, n)
-		copy(data, buf[:n])
-
-		p, err := common.DecodePacket(data)
-		if err != nil {
-			continue
-		}
-
-		if p.Header.PacketType == common.DATA {
-			if c.crypto == nil {
-				continue
-			}
-			decryptedData, err := c.crypto.Decrypt(p.Payload, p.Header.Counter)
-			if err != nil {
-				log.Printf("listenUDP: decrypt: %v\n", err)
-				continue
-			}
-
-			if _, err = tun.Write(decryptedData); err != nil {
-				log.Printf("error writing to TUN: %v\n", err)
-			}
-			continue
-		}
-
-		c.incoming <- p
-	}
-}
