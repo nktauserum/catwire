@@ -13,9 +13,9 @@ import (
 	"sync"
 
 	"github.com/nktauserum/catwire/common"
+	"github.com/nktauserum/catwire/common/session"
 	"github.com/nktauserum/catwire/server/config"
 	"github.com/nktauserum/catwire/server/routing"
-	"github.com/nktauserum/catwire/server/session"
 	"github.com/songgao/water"
 )
 

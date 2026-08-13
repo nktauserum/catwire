@@ -3,7 +3,7 @@ package routing
 import (
 	"sync"
 
-	"github.com/nktauserum/catwire/server/session"
+	"github.com/nktauserum/catwire/common/session"
 )
 
 type PeerRouting struct {

@@ -19,8 +19,6 @@ import (
 	"github.com/nktauserum/catwire/common"
 )
 
-var nextSequenceNumber atomic.Uint64
-
 type Client struct {
 	incoming chan common.Packet
 	outgoing chan []byte
@@ -31,6 +29,7 @@ type Client struct {
 
 	crypto    *common.Crypto
 	peerIndex uint64
+	counter atomic.Uint64
 }
 
 func (c *Client) Start() {
@@ -39,7 +38,7 @@ func (c *Client) Start() {
 			Header: common.Header{
 				PacketType: common.HANDSHAKE_INIT,
 				PeerIndex:  0,
-				Counter:    nextSequenceNumber.Load(),
+				Counter:    c.counter.Load(),
 			},
 			Payload: c.clientPublicKey.Bytes(),
 		}
@@ -237,7 +236,7 @@ func (c *Client) listenTUN(tun *water.Interface) {
 			continue
 		}
 
-		counter := nextSequenceNumber.Add(1) - 1
+		counter := c.counter.Add(1) - 1
 
 		encryptedData, err := c.crypto.Encrypt(buf[:n], counter)
 		if err != nil {
