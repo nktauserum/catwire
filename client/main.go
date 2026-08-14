@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/ecdh"
 	"encoding/base64"
+	"encoding/binary"
 	"flag"
 	"fmt"
 	"log"
@@ -105,7 +106,22 @@ func (c *Client) Start(serverAddr string) {
 	for p := range c.incoming {
 		switch p.Header.PacketType {
 		case common.DISCOVER:
-			log.Printf("Discover w len(%v): %#v\n", len(p.Payload), p.Payload)
+			payload, err := c.serverSession.Incoming(p, nil)
+			if err != nil {
+				log.Printf("Error decrypting discover payload: %v\n", err)
+				continue
+			}
+
+			for offset := range len(payload) / 42 { // the entries count
+				privateAddr := payload[offset:]
+				publicAddr := payload[offset+5 : offset+9]
+				port := binary.BigEndian.Uint16(payload[offset+10 : offset+12])
+
+				var publicKey [32]byte
+				copy(publicKey[:], payload[offset+13:offset+42])
+
+				log.Printf("Entry #%v: %v %v:%v %v\n", offset+1, net.IP(privateAddr).String(), net.IP(publicAddr).String(), port, base64.StdEncoding.EncodeToString(publicKey[:]))
+			}
 		default:
 			log.Printf("Unknown packet with type %v\n", p.Header.PacketType)
 		}
