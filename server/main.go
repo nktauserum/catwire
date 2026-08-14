@@ -233,9 +233,9 @@ func sendTUN(tun *water.Interface, outgoing chan []byte) {
 
 type DiscoverEntry struct {
 	PrivateAddr uint32
-	PublicAddr uint32
-	Port uint16
-	PublicKey []byte
+	PublicAddr  string
+	Port        string
+	PublicKey   []byte
 }
 
 func (s *Server) Discover() {
@@ -243,17 +243,16 @@ func (s *Server) Discover() {
 
 	list := make([]DiscoverEntry, 0, len(table))
 	for addr, session := range table {
-		host, p, err := net.SplitHostPort(session.RemoteAddr())
-		if err != nil {continue}
-
-		port, err := strconv.Atoi(p)
-		if err != nil {continue}
+		host, port, err := net.SplitHostPort(session.RemoteAddr())
+		if err != nil {
+			continue
+		}
 
 		entry := DiscoverEntry{
 			PrivateAddr: addr,
-			PublicAddr: common.IPAsInteger(host),
-			Port: uint16(port),
-			PublicKey: session.PublicKey.Bytes(),
+			PublicAddr:  host,
+			Port:        port,
+			PublicKey:   session.PublicKey.Bytes(),
 		}
 
 		log.Printf("len(privateKey) == %v\n", len(entry.PublicKey))
