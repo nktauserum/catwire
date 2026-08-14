@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/ecdh"
 	"encoding/base64"
+	"encoding/binary"
 	"flag"
 	"fmt"
 	"log"
@@ -231,36 +232,39 @@ func sendTUN(tun *water.Interface, outgoing chan []byte) {
 	}
 }
 
-type DiscoverEntry struct {
-	PrivateAddr uint32
-	PublicAddr  string
-	Port        string
-	PublicKey   []byte
-}
-
 func (s *Server) Discover() {
-	table := s.IPLookupTable.Copy()
+	// entry: 	 private addr | public address | port | public key
+	entrySize := 4 + 4 + 2 + 32
 
-	list := make([]DiscoverEntry, 0, len(table))
+	table := s.IPLookupTable.Copy()
+	if len(table) == 0 {
+		return
+	}
+
+	result := make([]byte, 0, entrySize*len(table))
 	for addr, session := range table {
-		host, port, err := net.SplitHostPort(session.RemoteAddr())
+		buf := [42]byte{0} // hardcoded here for a reason
+		host, p, err := net.SplitHostPort(session.RemoteAddr())
 		if err != nil {
 			continue
 		}
 
-		entry := DiscoverEntry{
-			PrivateAddr: addr,
-			PublicAddr:  host,
-			Port:        port,
-			PublicKey:   session.PublicKey.Bytes(),
+		port, err := strconv.Atoi(p)
+		if err != nil {
+			continue
 		}
 
-		log.Printf("len(privateKey) == %v\n", len(entry.PublicKey))
+		binary.BigEndian.PutUint32(buf[:], addr)
+		binary.BigEndian.PutUint32(buf[5:9], common.IPAsInteger(host))
+		binary.BigEndian.PutUint16(buf[10:12], uint16(port))
+		copy(buf[13:], session.PublicKey.Bytes())
 
-		list = append(list, entry)
+		result = append(result, buf[:]...)
 	}
 
-	log.Printf("List: %#v\n", list)
+	for _, session := range table {
+		session.TypedOutgoing(result, common.DISCOVER)
+	}
 }
 
 func main() {

@@ -64,7 +64,7 @@ func (s *Session) Incoming(p common.Packet, remoteAddr *net.UDPAddr) ([]byte, er
 	return decrypted, nil
 }
 
-func (s *Session) Outgoing(data []byte) {
+func (s *Session) TypedOutgoing(data []byte, packetType uint8) {
 	counter := s.Counter.Add(1) - 1
 
 	encrypted, err := s.crypto.Encrypt(data, counter)
@@ -75,7 +75,7 @@ func (s *Session) Outgoing(data []byte) {
 
 	p := common.Packet{
 		Header: common.Header{
-			PacketType: common.DATA,
+			PacketType: packetType,
 			PeerIndex:  s.PeerIndex,
 			Counter:    counter,
 		},
@@ -84,6 +84,10 @@ func (s *Session) Outgoing(data []byte) {
 
 	encoded := common.EncodePacket(p)
 	s.Send(encoded) // directly to UDP
+}
+
+func (s *Session) Outgoing(data []byte) {
+	s.TypedOutgoing(data, common.DATA)
 }
 
 func (s *Session) RemoteAddr() string {
