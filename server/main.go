@@ -252,8 +252,11 @@ func (s *Server) Discover() {
 		entry := DiscoverEntry{
 			PrivateAddr: addr,
 			PublicAddr: common.IPAsInteger(host),
-			Port: uint16(port), 
+			Port: uint16(port),
+			PublicKey: session.PublicKey.Bytes(),
 		}
+
+		log.Printf("len(privateKey) == %v\n", len(entry.PublicKey))
 
 		list = append(list, entry)
 	}
