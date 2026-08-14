@@ -49,11 +49,11 @@ func (c *Client) Handshake(remoteAddr string) (*session.Session, error) {
 		},
 		Payload: c.clientPublicKey.Bytes(),
 	}
-
 	encHandshake := common.EncodePacket(p)
 
 	_, err = c.conn.WriteToUDP(encHandshake, addr)
 	if err != nil {
+		log.Printf("Error sending packet: %v\n", err)
 		return nil, err
 	}
 
@@ -76,7 +76,7 @@ func (c *Client) Handshake(remoteAddr string) (*session.Session, error) {
 			return nil, err
 		}
 
-		log.Println("The shared secret was computed!")
+		log.Printf("The shared secret for %v was computed!\n", remoteAddr)
 
 		crypto, err := common.NewCrypto(secret)
 		if err != nil {
@@ -140,6 +140,8 @@ func (c *Client) listenUDP(conn net.Conn, tun *water.Interface) {
 		if err != nil {
 			continue
 		}
+
+		log.Printf("Incoming: %#v\n", p)
 
 		if p.Header.PacketType == common.DATA {
 			if c.serverSession == nil {
