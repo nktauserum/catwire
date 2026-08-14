@@ -271,7 +271,7 @@ func main() {
 	outgoing := make(chan []byte, 1024)
 
 	client := Client{
-
+		conn: conn,
 		outgoing: outgoing,
 		incoming: incoming,
 
@@ -280,6 +280,7 @@ func main() {
 		clientPublicKey:  clientPublicKey,
 
 		addressTable: routing.NewAddressTable(),
+		indexTable: routing.NewIndexTable(1),
 	}
 
 	// start send loop
