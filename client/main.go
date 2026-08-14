@@ -97,7 +97,7 @@ func (c *Client) Handshake(remoteAddr string) (*session.Session, error) {
 func (c *Client) Start(serverAddr string) {
 	s, err := c.Handshake(serverAddr)
 	if err != nil {
-		log.Fatalf("Handshare error: %v\n", err)
+		log.Fatalf("Handshake error: %v\n", err)
 	}
 
 	c.serverSession = s
@@ -140,8 +140,6 @@ func (c *Client) listenUDP(conn net.Conn, tun *water.Interface) {
 		if err != nil {
 			continue
 		}
-
-		log.Printf("Incoming: %#v\n", p)
 
 		if p.Header.PacketType == common.DATA {
 			if c.serverSession == nil {
