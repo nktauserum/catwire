@@ -22,9 +22,9 @@ import (
 const ipAddr = "10.0.5.1"
 
 type Server struct {
-	IndexLookupTable routing.PeerIndices
+	IndexLookupTable routing.IndexTable
 	AllowedIPs       map[string]uint32
-	IPLookupTable    routing.PeerRouting
+	IPLookupTable    routing.AddressTable
 
 	curve            ecdh.Curve
 	serverPrivateKey *ecdh.PrivateKey
@@ -141,7 +141,7 @@ func (server *Server) listenUDP() {
 					idx := server.IndexLookupTable.Store(key, s)
 					server.IPLookupTable.Store(clientIP, s)
 
-					s.InitSession(idx, clientPublicKey, crypto)
+					s.InitSession(idx, crypto)
 
 					resp := common.Packet{
 						Header: common.Header{
@@ -311,8 +311,8 @@ func main() {
 		serverPrivateKey: serverPrivateKey,
 		serverPublicKey:  serverPublicKey,
 
-		IPLookupTable:    routing.NewPeerRouting(),
-		IndexLookupTable: routing.NewPeerIndices(len(allowedIPs)),
+		IPLookupTable:    routing.NewAddressTable(),
+		IndexLookupTable: routing.NewIndexTable(len(allowedIPs)),
 		AllowedIPs:       allowedIPs,
 	}
 

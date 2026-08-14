@@ -10,80 +10,97 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
-	"sync/atomic"
 	"time"
 
 	"github.com/songgao/water"
 
 	"github.com/nktauserum/catwire/client/config"
 	"github.com/nktauserum/catwire/common"
+	"github.com/nktauserum/catwire/common/routing"
+	"github.com/nktauserum/catwire/common/session"
 )
 
 type Client struct {
 	incoming chan common.Packet
 	outgoing chan []byte
+	conn     *net.UDPConn
 
 	curve            ecdh.Curve
 	clientPrivateKey *ecdh.PrivateKey
 	clientPublicKey  *ecdh.PublicKey
 
-	crypto    *common.Crypto
-	peerIndex uint64
-	counter   atomic.Uint64
+	serverSession *session.Session
+
+	addressTable routing.AddressTable
+	indexTable   routing.IndexTable
 }
 
-func (c *Client) Start() {
-	for range 5 {
-		p := common.Packet{
-			Header: common.Header{
-				PacketType: common.HANDSHAKE_INIT,
-				PeerIndex:  0,
-				Counter:    c.counter.Load(),
-			},
-			Payload: c.clientPublicKey.Bytes(),
-		}
-
-		encHandshake := common.EncodePacket(p)
-
-		c.outgoing <- encHandshake
-
-		select {
-		case resp := <-c.incoming:
-			if resp.Header.PacketType != common.HANDSHAKE_INIT {
-				return
-			}
-
-			var err error
-
-			serverPub, err := c.curve.NewPublicKey(resp.Payload)
-			if err != nil {
-				log.Printf("error creating new public key: %v\n", err)
-				return
-			}
-
-			secret, err := c.clientPrivateKey.ECDH(serverPub)
-			if err != nil {
-				log.Printf("error computing the secret: %v\n", err)
-				return
-			}
-
-			log.Println("The shared secret was computed!")
-
-			crypto, err := common.NewCrypto(secret)
-			if err != nil {
-				log.Printf("error creating crypto: %v\n", err)
-				return
-			}
-
-			c.peerIndex = resp.Header.PeerIndex
-			c.crypto = crypto
-
-			return
-
-		case <-time.After(4 * time.Second):
-			continue
-		}
+func (c *Client) Handshake(remoteAddr string) (*session.Session, error) {
+	addr, err := net.ResolveUDPAddr("udp", remoteAddr)
+	if err != nil {
+		return nil, err
 	}
+
+	p := common.Packet{
+		Header: common.Header{
+			PacketType: common.HANDSHAKE_INIT,
+			PeerIndex:  0,
+			Counter:    0,
+		},
+		Payload: c.clientPublicKey.Bytes(),
+	}
+
+	encHandshake := common.EncodePacket(p)
+
+	_, err = c.conn.WriteToUDP(encHandshake, addr)
+	if err != nil {
+		return nil, err
+	}
+
+	select {
+	case resp := <-c.incoming:
+		if resp.Header.PacketType != common.HANDSHAKE_INIT {
+			return nil, err
+		}
+
+		var err error
+		serverPub, err := c.curve.NewPublicKey(resp.Payload)
+		if err != nil {
+			log.Printf("error creating new public key: %v\n", err)
+			return nil, err
+		}
+
+		secret, err := c.clientPrivateKey.ECDH(serverPub)
+		if err != nil {
+			log.Printf("error computing the secret: %v\n", err)
+			return nil, err
+		}
+
+		log.Println("The shared secret was computed!")
+
+		crypto, err := common.NewCrypto(secret)
+		if err != nil {
+			log.Printf("error creating crypto: %v\n", err)
+			return nil, err
+		}
+
+		s := session.NewSession(c.conn, addr)
+		s.InitSession(resp.Header.PeerIndex, crypto)
+
+		return s, nil
+
+	case <-time.After(4 * time.Second):
+		return nil, fmt.Errorf("Timeout.")
+	}
+}
+
+func (c *Client) Start(serverAddr string) {
+	s, err := c.Handshake(serverAddr)
+	if err != nil {
+		log.Fatalf("Handshare error: %v\n", err)
+	}
+
+	c.serverSession = s
 
 	for p := range c.incoming {
 		log.Printf("Unknown packet with type %v\n", p.Header.PacketType)
@@ -99,39 +116,11 @@ func (c *Client) listenTUN(tun *water.Interface) {
 			continue
 		}
 
-		if c.crypto == nil {
+		if c.serverSession == nil {
 			continue
 		}
 
-		counter := c.counter.Add(1) - 1
-
-		encryptedData, err := c.crypto.Encrypt(buf[:n], counter)
-		if err != nil {
-			log.Printf("listenTUN: encrypt: %v\n", err)
-			continue
-		}
-
-		p := common.Packet{
-			Header: common.Header{
-				PacketType: common.DATA,
-				PeerIndex:  c.peerIndex,
-				Counter:    counter,
-			},
-			Payload: encryptedData,
-		}
-
-		encodedPacket := common.EncodePacket(p)
-
-		c.outgoing <- encodedPacket
-	}
-}
-
-func (c *Client) sendUDP(conn net.Conn) {
-	for packet := range c.outgoing {
-		if _, err := conn.Write(packet); err != nil {
-			log.Printf("write: %v", err)
-			continue
-		}
+		c.serverSession.Outgoing(buf[:n])
 	}
 }
 
@@ -153,16 +142,13 @@ func (c *Client) listenUDP(conn net.Conn, tun *water.Interface) {
 		}
 
 		if p.Header.PacketType == common.DATA {
-			if c.crypto == nil {
-				continue
-			}
-			decryptedData, err := c.crypto.Decrypt(p.Payload, p.Header.Counter)
-			if err != nil {
-				log.Printf("listenUDP: decrypt: %v\n", err)
+			if c.serverSession == nil {
 				continue
 			}
 
-			if _, err = tun.Write(decryptedData); err != nil {
+			decrypted, err := c.serverSession.Incoming(p, nil)
+
+			if _, err = tun.Write(decrypted); err != nil {
 				log.Printf("error writing to TUN: %v\n", err)
 			}
 			continue
@@ -265,13 +251,18 @@ func main() {
 	}
 	clientPublicKey := clientPrivateKey.PublicKey()
 
-	conn, err := net.Dial("udp", config.ServerAddr)
+	addr, err := net.ResolveUDPAddr("udp", ":8245") //TODO: dehardcode the port
 	if err != nil {
-		log.Fatalln("error dialing to the server: ", err)
+		log.Fatalf("error resolving udp addr: %v\n", err)
+	}
+
+	conn, err := net.ListenUDP("udp", addr)
+	if err != nil {
+		log.Fatalf("error listening: %v\n", err)
 	}
 	defer conn.Close()
 
-	log.Printf("Dialing the connection to the server on %s\n", config.ServerAddr)
+	log.Println("Listening on :8245")
 
 	incoming := make(chan common.Packet, 1024)
 	outgoing := make(chan []byte, 1024)
@@ -285,16 +276,14 @@ func main() {
 		clientPrivateKey: clientPrivateKey,
 		clientPublicKey:  clientPublicKey,
 
-		crypto:    nil,
-		peerIndex: 0,
+		addressTable: routing.NewAddressTable(),
 	}
 
 	// start send loop
-	go client.sendUDP(conn)
 	go client.listenUDP(conn, tun)
 	go client.listenTUN(tun)
 
-	go client.Start()
+	go client.Start(config.ServerAddr)
 
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, os.Interrupt)

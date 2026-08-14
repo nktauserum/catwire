@@ -10,7 +10,6 @@ import (
 )
 
 type Session struct {
-	PublicKey *ecdh.PublicKey
 	secret    []byte
 	crypto    *common.Crypto
 	Counter   atomic.Uint64
@@ -35,12 +34,10 @@ func NewSession(
 
 func (s *Session) InitSession(
 	idx uint64,
-	key *ecdh.PublicKey,
 	crypto *common.Crypto,
 ) {
 	s.PeerIndex = idx
 	s.crypto = crypto
-	s.PublicKey = key
 }
 
 func (s *Session) Send(data []byte) {
@@ -57,7 +54,9 @@ func (s *Session) Incoming(p common.Packet, remoteAddr *net.UDPAddr) ([]byte, er
 		return nil, err
 	}
 
-	s.remoteAddr.Store(remoteAddr)
+	if remoteAddr != nil {
+		s.remoteAddr.Store(remoteAddr)
+	}
 
 	return decrypted, nil
 }
