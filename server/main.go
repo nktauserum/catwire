@@ -141,7 +141,7 @@ func (server *Server) listenUDP() {
 					idx := server.IndexLookupTable.Store(key, s)
 					server.IPLookupTable.Store(clientIP, s)
 
-					s.InitSession(idx, crypto)
+					s.InitSession(idx, crypto, clientPublicKey)
 
 					resp := common.Packet{
 						Header: common.Header{
