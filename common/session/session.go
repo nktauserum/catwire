@@ -10,12 +10,13 @@ import (
 )
 
 type Session struct {
-	secret    []byte
-	crypto    *common.Crypto
-	Counter   atomic.Uint64
+	secret  []byte
+	crypto  *common.Crypto
+	Counter atomic.Uint64
 
 	remoteAddr atomic.Pointer[net.UDPAddr]
 	conn       *net.UDPConn
+	PublicKey  *ecdh.PublicKey
 
 	PeerIndex uint64
 }
@@ -35,9 +36,11 @@ func NewSession(
 func (s *Session) InitSession(
 	idx uint64,
 	crypto *common.Crypto,
+	publicKey *ecdh.PublicKey,
 ) {
 	s.PeerIndex = idx
 	s.crypto = crypto
+	s.PublicKey = publicKey
 }
 
 func (s *Session) Send(data []byte) {

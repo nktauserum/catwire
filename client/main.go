@@ -85,7 +85,7 @@ func (c *Client) Handshake(remoteAddr string) (*session.Session, error) {
 		}
 
 		s := session.NewSession(c.conn, addr)
-		s.InitSession(resp.Header.PeerIndex, crypto)
+		s.InitSession(resp.Header.PeerIndex, crypto, serverPub)
 
 		return s, nil
 
