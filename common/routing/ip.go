@@ -36,7 +36,7 @@ func (t *AddressTable) Copy() map[uint32]*session.Session {
 	t.mu.RLock()
 	ret := make(map[uint32]*session.Session, len(t.lookupTable))
 	maps.Copy(ret, t.lookupTable)
-	t.mu.Unlock()
+	t.mu.RUnlock()
 
 	return ret
 }
