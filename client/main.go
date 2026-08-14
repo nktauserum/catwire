@@ -114,11 +114,11 @@ func (c *Client) Start(serverAddr string) {
 
 			for offset := range len(payload) / 42 { // the entries count
 				privateAddr := payload[offset:]
-				publicAddr := payload[offset+5 : offset+9]
-				port := binary.BigEndian.Uint16(payload[offset+10 : offset+12])
+				publicAddr := payload[offset+4 : offset+8]
+				port := binary.BigEndian.Uint16(payload[offset+9 : offset+11])
 
 				var publicKey [32]byte
-				copy(publicKey[:], payload[offset+13:offset+42])
+				copy(publicKey[:], payload[offset+12:offset+42])
 
 				log.Printf("Entry #%v: %v %v:%v %v\n", offset+1, net.IP(privateAddr).String(), net.IP(publicAddr).String(), port, base64.StdEncoding.EncodeToString(publicKey[:]))
 			}
