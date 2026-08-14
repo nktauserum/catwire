@@ -112,15 +112,16 @@ func (c *Client) Start(serverAddr string) {
 				continue
 			}
 
-			for offset := range len(payload) / 42 { // the entries count
-				privateAddr := payload[offset:]
+			for i := range len(payload) / 42 { // the entries count
+				offset := i * 42
+				privateAddr := payload[offset:offset+4]
 				publicAddr := payload[offset+4 : offset+8]
-				port := binary.BigEndian.Uint16(payload[offset+9 : offset+11])
+				port := binary.BigEndian.Uint16(payload[offset+8 : offset+10])
 
 				var publicKey [32]byte
-				copy(publicKey[:], payload[offset+12:offset+42])
+				copy(publicKey[:], payload[offset+10:offset+42])
 
-				log.Printf("Entry #%v: %v %v:%v %v\n", offset+1, net.IP(privateAddr).String(), net.IP(publicAddr).String(), port, base64.StdEncoding.EncodeToString(publicKey[:]))
+				log.Printf("Entry #%v: %v %v:%v %v\n", i, net.IP(privateAddr).String(), net.IP(publicAddr).String(), port, base64.StdEncoding.EncodeToString(publicKey[:]))
 			}
 		default:
 			log.Printf("Unknown packet with type %v\n", p.Header.PacketType)

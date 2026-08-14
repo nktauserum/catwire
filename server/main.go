@@ -256,8 +256,8 @@ func (s *Server) Discover() {
 
 		binary.BigEndian.PutUint32(buf[:], addr)
 		binary.BigEndian.PutUint32(buf[4:8], common.IPAsInteger(host))
-		binary.BigEndian.PutUint16(buf[9:11], uint16(port))
-		copy(buf[12:], session.PublicKey.Bytes())
+		binary.BigEndian.PutUint16(buf[8:10], uint16(port))
+		copy(buf[10:], session.PublicKey.Bytes())
 
 		result = append(result, buf[:]...)
 	}
