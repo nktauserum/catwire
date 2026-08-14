@@ -85,3 +85,7 @@ func (s *Session) Outgoing(data []byte) {
 	encoded := common.EncodePacket(p)
 	s.Send(encoded) // directly to UDP
 }
+
+func (s *Session) RemoteAddr() string {
+	return s.remoteAddr.Load().String()
+}

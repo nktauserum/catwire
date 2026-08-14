@@ -155,6 +155,9 @@ func (server *Server) listenUDP() {
 					enc := common.EncodePacket(resp)
 
 					s.Send(enc) // вызываем внутреннюю функцию Session для отправки байтов сразу в UDP
+
+					// здесь делаем Discover
+					server.Discover()
 				}
 
 				pool.Put(t.Data)
@@ -226,6 +229,36 @@ func sendTUN(tun *water.Interface, outgoing chan []byte) {
 			log.Println("sendTUN: ", err)
 		}
 	}
+}
+
+type DiscoverEntry struct {
+	PrivateAddr uint32
+	PublicAddr uint32
+	Port uint16
+	PublicKey []byte
+}
+
+func (s *Server) Discover() {
+	table := s.IPLookupTable.Copy()
+
+	list := make([]DiscoverEntry, 0, len(table))
+	for addr, session := range table {
+		host, p, err := net.SplitHostPort(session.RemoteAddr())
+		if err != nil {continue}
+
+		port, err := strconv.Atoi(p)
+		if err != nil {continue}
+
+		entry := DiscoverEntry{
+			PrivateAddr: addr,
+			PublicAddr: common.IPAsInteger(host),
+			Port: uint16(port), 
+		}
+
+		list = append(list, entry)
+	}
+
+	log.Printf("List: %#v\n", list)
 }
 
 func main() {

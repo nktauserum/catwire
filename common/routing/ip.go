@@ -1,6 +1,7 @@
 package routing
 
 import (
+	"maps"
 	"sync"
 
 	"github.com/nktauserum/catwire/common/session"
@@ -29,4 +30,13 @@ func (t *AddressTable) Load(destIP uint32) *session.Session {
 	t.mu.RUnlock()
 
 	return s
+}
+
+func (t *AddressTable) Copy() map[uint32]*session.Session {
+	t.mu.RLock()
+	ret := make(map[uint32]*session.Session, len(t.lookupTable))
+	maps.Copy(ret, t.lookupTable)
+	t.mu.Unlock()
+
+	return ret
 }
