@@ -103,7 +103,12 @@ func (c *Client) Start(serverAddr string) {
 	c.serverSession = s
 
 	for p := range c.incoming {
-		log.Printf("Unknown packet with type %v\n", p.Header.PacketType)
+		switch p.Header.PacketType {
+		case common.DISCOVER:
+			log.Printf("Discover w len(%v): %#v\n", len(p.Payload), p.Payload)
+		default:
+			log.Printf("Unknown packet with type %v\n", p.Header.PacketType)
+		}
 	}
 }
 
