@@ -147,6 +147,9 @@ func (c *Client) listenUDP(conn net.Conn, tun *water.Interface) {
 			}
 
 			decrypted, err := c.serverSession.Incoming(p, nil)
+			if err != nil {
+				continue
+			}
 
 			if _, err = tun.Write(decrypted); err != nil {
 				log.Printf("error writing to TUN: %v\n", err)
