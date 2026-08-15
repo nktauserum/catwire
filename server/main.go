@@ -146,7 +146,7 @@ func (server *Server) listenUDP() {
 
 					resp := common.Packet{
 						Header: common.Header{
-							PacketType: common.HANDSHAKE_INIT,
+							PacketType: common.HANDSHAKE_RESPONSE,
 							PeerIndex:  idx,
 							Counter:    s.Counter.Add(1) - 1,
 						},

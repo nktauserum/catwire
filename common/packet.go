@@ -8,6 +8,7 @@ import (
 const (
 	DATA uint8 = iota
 	HANDSHAKE_INIT
+	HANDSHAKE_RESPONSE
 	DISCOVER
 )
 

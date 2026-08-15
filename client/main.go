@@ -60,7 +60,7 @@ func (c *Client) Handshake(remoteAddr string) (*session.Session, error) {
 
 	select {
 	case resp := <-c.incoming:
-		if resp.Header.PacketType != common.HANDSHAKE_INIT {
+		if resp.Header.PacketType != common.HANDSHAKE_RESPONSE {
 			return nil, err
 		}
 
