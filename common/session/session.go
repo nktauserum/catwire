@@ -4,6 +4,7 @@ import (
 	"crypto/ecdh"
 	"log"
 	"net"
+	"sync"
 	"sync/atomic"
 
 	"github.com/nktauserum/catwire/common"
@@ -19,6 +20,8 @@ type Session struct {
 	PublicKey  *ecdh.PublicKey
 
 	PeerIndex uint64
+
+	mu sync.RWMutex
 }
 
 func NewSession(
@@ -38,9 +41,19 @@ func (s *Session) InitSession(
 	crypto *common.Crypto,
 	publicKey *ecdh.PublicKey,
 ) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	s.PeerIndex = idx
 	s.crypto = crypto
 	s.PublicKey = publicKey
+}
+
+func (s *Session) Initialized() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return s.crypto != nil
 }
 
 func (s *Session) Send(data []byte) {

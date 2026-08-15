@@ -128,7 +128,7 @@ func (c *Client) Start(serverAddr string) {
 				var publicKey [32]byte
 				copy(publicKey[:], payload[offset+10:offset+42])
 
-				log.Printf("Entry #%v: %v %v:%v %v\n", i, net.IP(privateAddr).String(), net.IP(publicAddr).String(), port, base64.StdEncoding.EncodeToString(publicKey[:]))
+				log.Printf("Entry #%v: %v %v:%v %v\n", i, net.IP(privateAddr).String(), net.IP(publicAddr).String(), port, base64.StdEncoding.EncodeToString(publicKey[:]))	
 			}
 
 		case common.HANDSHAKE_INIT:
