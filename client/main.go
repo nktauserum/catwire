@@ -119,6 +119,11 @@ func (c *Client) Start(serverAddr string) {
 				continue
 			}
 
+			if len(payload) < 42 {
+				log.Printf("Malformed DISCOVER packet. Reason: too small (%v bytes)\n", len(payload))
+				continue
+			}
+
 			for i := range len(payload) / 42 { // the entries count
 				offset := i * 42
 				privateAddr := payload[offset:offset+4]
@@ -128,7 +133,22 @@ func (c *Client) Start(serverAddr string) {
 				var publicKey [32]byte
 				copy(publicKey[:], payload[offset+10:offset+42])
 
-				log.Printf("Entry #%v: %v %v:%v %v\n", i, net.IP(privateAddr).String(), net.IP(publicAddr).String(), port, base64.StdEncoding.EncodeToString(publicKey[:]))	
+				log.Printf("Entry #%v: %v %v:%v %v\n", i, net.IP(privateAddr).String(), net.IP(publicAddr).String(), port, base64.StdEncoding.EncodeToString(publicKey[:]))
+
+				addr, err := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", net.IP(publicAddr).String(), port))
+				if err != nil {
+					continue
+				}
+
+				entryPublicKey, err := c.curve.NewPublicKey(publicKey[:])
+				if err != nil {
+					log.Printf("error creating new public key: %v\n", err)
+					continue
+				}
+
+				session := session.NewSession(c.conn, addr)
+				c.addressTable.Store(binary.BigEndian.Uint32(privateAddr), session)
+				session.InitSession(0, nil, entryPublicKey)
 			}
 
 		case common.HANDSHAKE_INIT:
@@ -140,15 +160,19 @@ func (c *Client) Start(serverAddr string) {
 
 			table := c.addressTable.Copy() // maybe it's not that bad - handshake logic is not a bottleneck
 			clientPrivateAddr := uint32(0)
-			for addr, session := range table { // maybe consider creating reverse index
+			var session *session.Session
+			for addr, s := range table { // maybe consider creating reverse index
+				if session.PublicKey == nil {
+					continue
+				}
+
 				if session.PublicKey == receivedPublicKey {
 					clientPrivateAddr = addr
+					session = s
 					break
 				}
 			}
-			if clientPrivateAddr == 0 {continue}
-
-			s := session.NewSession(c.conn, t.ClientAddr)
+			if clientPrivateAddr == 0 && session != nil {continue}
 
 			secret, err := c.clientPrivateKey.ECDH(receivedPublicKey)
 			if err != nil {
