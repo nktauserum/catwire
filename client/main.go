@@ -162,11 +162,7 @@ func (c *Client) Start(serverAddr string) {
 			clientPrivateAddr := uint32(0)
 			var session *session.Session
 			for addr, s := range table { // maybe consider creating reverse index
-				if session.PublicKey == nil {
-					continue
-				}
-
-				if session.PublicKey == receivedPublicKey {
+				if s.PublicKey == receivedPublicKey {
 					clientPrivateAddr = addr
 					session = s
 					break
