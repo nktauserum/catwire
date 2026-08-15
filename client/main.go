@@ -22,7 +22,7 @@ import (
 )
 
 type Client struct {
-	incoming chan common.Packet
+	incoming chan Message 
 	outgoing chan []byte
 	conn     *net.UDPConn
 
@@ -59,7 +59,8 @@ func (c *Client) Handshake(remoteAddr string) (*session.Session, error) {
 	}
 
 	select {
-	case resp := <-c.incoming:
+	case t := <-c.incoming:
+		resp := t.Packet
 		if resp.Header.PacketType != common.HANDSHAKE_RESPONSE {
 			return nil, err
 		}
@@ -95,6 +96,11 @@ func (c *Client) Handshake(remoteAddr string) (*session.Session, error) {
 	}
 }
 
+type Message struct {
+	Packet common.Packet
+	ClientAddr *net.UDPAddr
+}
+
 func (c *Client) Start(serverAddr string) {
 	s, err := c.Handshake(serverAddr)
 	if err != nil {
@@ -103,7 +109,8 @@ func (c *Client) Start(serverAddr string) {
 
 	c.serverSession = s
 
-	for p := range c.incoming {
+	for t := range c.incoming {
+		p := t.Packet
 		switch p.Header.PacketType {
 		case common.DISCOVER:
 			payload, err := c.serverSession.Incoming(p, nil)
@@ -123,6 +130,56 @@ func (c *Client) Start(serverAddr string) {
 
 				log.Printf("Entry #%v: %v %v:%v %v\n", i, net.IP(privateAddr).String(), net.IP(publicAddr).String(), port, base64.StdEncoding.EncodeToString(publicKey[:]))
 			}
+
+		case common.HANDSHAKE_INIT:
+			key := base64.StdEncoding.EncodeToString(p.Payload)
+			receivedPublicKey, err := c.curve.NewPublicKey(p.Payload)
+			if err != nil {
+				continue
+			}
+
+			table := c.addressTable.Copy() // maybe it's not that bad - handshake logic is not a bottleneck
+			clientPrivateAddr := uint32(0)
+			for addr, session := range table { // maybe consider creating reverse index
+				if session.PublicKey == receivedPublicKey {
+					clientPrivateAddr = addr
+					break
+				}
+			}
+			if clientPrivateAddr == 0 {continue}
+
+			s := session.NewSession(c.conn, t.ClientAddr)
+
+			secret, err := c.clientPrivateKey.ECDH(receivedPublicKey)
+			if err != nil {
+				continue
+			}
+
+			crypto, err := common.NewCrypto(secret)
+			if err != nil {
+				log.Printf("error creating crypto: %v\n", err)
+				continue
+			}
+
+
+			idx := c.indexTable.Store(key, s)
+			c.addressTable.Store(clientPrivateAddr, s)
+
+			s.InitSession(idx, crypto, receivedPublicKey)
+
+			resp := common.Packet{
+				Header: common.Header{
+					PacketType: common.HANDSHAKE_RESPONSE,
+					PeerIndex:  idx,
+					Counter:    s.Counter.Add(1) - 1,
+				},
+				Payload: c.clientPublicKey.Bytes(),
+			}
+
+			enc := common.EncodePacket(resp)
+
+			s.Send(enc) // вызываем внутреннюю функцию Session для отправки байтов сразу в UDP
+			
 		default:
 			log.Printf("Unknown packet with type %v\n", p.Header.PacketType)
 		}
@@ -146,11 +203,11 @@ func (c *Client) listenTUN(tun *water.Interface) {
 	}
 }
 
-func (c *Client) listenUDP(conn net.Conn, tun *water.Interface) {
+func (c *Client) listenUDP(tun *water.Interface) {
 	buf := make([]byte, 65535)
 
 	for {
-		n, err := conn.Read(buf)
+		n, clientAddr, err := c.conn.ReadFromUDP(buf)
 		if err != nil {
 			continue
 		}
@@ -179,7 +236,7 @@ func (c *Client) listenUDP(conn net.Conn, tun *water.Interface) {
 			continue
 		}
 
-		c.incoming <- p
+		c.incoming <- Message{Packet: p, ClientAddr: clientAddr}
 	}
 }
 
@@ -289,7 +346,7 @@ func main() {
 
 	log.Println("Listening on :8245")
 
-	incoming := make(chan common.Packet, 1024)
+	incoming := make(chan Message, 1024)
 	outgoing := make(chan []byte, 1024)
 
 	client := Client{
@@ -306,7 +363,7 @@ func main() {
 	}
 
 	// start send loop
-	go client.listenUDP(conn, tun)
+	go client.listenUDP(tun)
 	go client.listenTUN(tun)
 
 	go client.Start(config.ServerAddr)
