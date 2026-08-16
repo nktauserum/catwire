@@ -22,7 +22,7 @@ import (
 )
 
 type Client struct {
-	incoming chan Message 
+	incoming chan Message
 	outgoing chan []byte
 	conn     *net.UDPConn
 
@@ -32,8 +32,8 @@ type Client struct {
 
 	serverSession *session.Session
 
-	addressTable routing.AddressTable
-	indexTable   routing.IndexTable
+	peerTable  routing.PeerTable
+	indexTable routing.IndexTable
 }
 
 func (c *Client) Handshake(remoteAddr string) (*session.Session, error) {
@@ -97,7 +97,7 @@ func (c *Client) Handshake(remoteAddr string) (*session.Session, error) {
 }
 
 type Message struct {
-	Packet common.Packet
+	Packet     common.Packet
 	ClientAddr *net.UDPAddr
 }
 
@@ -126,7 +126,7 @@ func (c *Client) Start(serverAddr string) {
 
 			for i := range len(payload) / 42 { // the entries count
 				offset := i * 42
-				privateAddr := payload[offset:offset+4]
+				privateAddr := payload[offset : offset+4]
 				publicAddr := payload[offset+4 : offset+8]
 				port := binary.BigEndian.Uint16(payload[offset+8 : offset+10])
 
@@ -140,37 +140,32 @@ func (c *Client) Start(serverAddr string) {
 					continue
 				}
 
-				entryPublicKey, err := c.curve.NewPublicKey(publicKey[:])
+				pubKey, err := c.curve.NewPublicKey(publicKey[:])
 				if err != nil {
 					log.Printf("error creating new public key: %v\n", err)
 					continue
 				}
 
-				session := session.NewSession(c.conn, addr)
-				c.addressTable.Store(binary.BigEndian.Uint32(privateAddr), session)
-				session.InitSession(0, nil, entryPublicKey)
+				c.peerTable.Add(
+					binary.BigEndian.Uint32(privateAddr),
+					addr,
+					pubKey,
+				)
 			}
 
 		case common.HANDSHAKE_INIT:
 			key := base64.StdEncoding.EncodeToString(p.Payload)
-			receivedPublicKey, err := c.curve.NewPublicKey(p.Payload)
+			publicKey, err := c.curve.NewPublicKey(p.Payload)
 			if err != nil {
 				continue
 			}
 
-			table := c.addressTable.Copy() // maybe it's not that bad - handshake logic is not a bottleneck
-			clientPrivateAddr := uint32(0)
-			var session *session.Session
-			for addr, s := range table { // maybe consider creating reverse index
-				if s.PublicKey == receivedPublicKey {
-					clientPrivateAddr = addr
-					session = s
-					break
-				}
+			_, peer, err := c.peerTable.Find(publicKey)
+			if err != nil {
+				continue // consider adding smth like ERROR packet return
 			}
-			if clientPrivateAddr == 0 && session != nil {continue}
 
-			secret, err := c.clientPrivateKey.ECDH(receivedPublicKey)
+			secret, err := c.clientPrivateKey.ECDH(publicKey)
 			if err != nil {
 				continue
 			}
@@ -181,11 +176,11 @@ func (c *Client) Start(serverAddr string) {
 				continue
 			}
 
-
+			s := session.NewSession(c.conn, peer.RemoteAddress)
 			idx := c.indexTable.Store(key, s)
-			c.addressTable.Store(clientPrivateAddr, s)
+			s.InitSession(idx, crypto, publicKey)
 
-			s.InitSession(idx, crypto, receivedPublicKey)
+			log.Printf("The connection with %v is successfully created!\n", peer.RemoteAddress.String())
 
 			resp := common.Packet{
 				Header: common.Header{
@@ -199,11 +194,23 @@ func (c *Client) Start(serverAddr string) {
 			enc := common.EncodePacket(resp)
 
 			s.Send(enc) // вызываем внутреннюю функцию Session для отправки байтов сразу в UDP
-			
+
 		default:
 			log.Printf("Unknown packet with type %v\n", p.Header.PacketType)
 		}
 	}
+}
+
+const ipAddr = "10.0.5.1"
+const subnetMask = (0xFFFFFFFF << (32 - 24)) & 0xFFFFFFFF // 24 as CIDR notation (0xFFFFFF00)
+var subnetAddr = getIPSubnet(common.IPAsInteger(ipAddr), subnetMask)
+
+func getIPSubnet(ip uint32, mask uint32) uint32 {
+	return ip & mask
+}
+
+func IPInLocalSubnet(ip uint32) bool {
+	return getIPSubnet(ip, subnetMask) == subnetAddr
 }
 
 func (c *Client) listenTUN(tun *water.Interface) {
@@ -213,6 +220,29 @@ func (c *Client) listenTUN(tun *water.Interface) {
 		n, err := tun.Read(buf)
 		if err != nil {
 			continue
+		}
+
+		destIP := common.ExtractDestinationIP(buf[:n])
+		if IPInLocalSubnet(destIP) && destIP != common.IPAsInteger(ipAddr) { // only if destIP owned by our virtual network and it isn't server's address (because it doesn't exist in IPLookupTable)
+			err := func() error {
+				peer, err := c.peerTable.Get(destIP)
+				if err != nil {
+					return err
+				}
+
+				if !peer.Connected() {
+					// handshake
+					return fmt.Errorf("Peer not connected")
+				}
+
+				peer.Session.Outgoing(buf[:n])
+				log.Printf("Successfully sent to %v\n", peer.RemoteAddress.String())
+				return nil
+			}()
+			if err == nil {
+				continue
+			}
+			log.Printf("Error sending in local subnet: %v\n", err)
 		}
 
 		if c.serverSession == nil {
@@ -378,8 +408,8 @@ func main() {
 		clientPrivateKey: clientPrivateKey,
 		clientPublicKey:  clientPublicKey,
 
-		addressTable: routing.NewAddressTable(),
-		indexTable:   routing.NewIndexTable(1),
+		peerTable:  routing.NewPeerTable(),
+		indexTable: routing.NewIndexTable(1),
 	}
 
 	// start send loop
