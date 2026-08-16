@@ -52,48 +52,52 @@ func (c *Client) Handshake(remoteAddr string) (*session.Session, error) {
 	}
 	encHandshake := common.EncodePacket(p)
 
-	_, err = c.conn.WriteToUDP(encHandshake, addr)
-	if err != nil {
-		log.Printf("Error sending packet: %v\n", err)
-		return nil, err
+	for range 5 {
+		_, err = c.conn.WriteToUDP(encHandshake, addr)
+		if err != nil {
+			log.Printf("Error sending packet: %v\n", err)
+			return nil, err
+		}
+
+		select {
+		case t := <-c.incoming:
+			resp := t.Packet
+			if resp.Header.PacketType != common.HANDSHAKE_RESPONSE {
+				continue
+			}
+
+			var err error
+			serverPub, err := c.curve.NewPublicKey(resp.Payload)
+			if err != nil {
+				log.Printf("error creating new public key: %v\n", err)
+				return nil, err
+			}
+
+			secret, err := c.clientPrivateKey.ECDH(serverPub)
+			if err != nil {
+				log.Printf("error computing the secret: %v\n", err)
+				return nil, err
+			}
+
+			log.Printf("The shared secret for %v was computed!\n", remoteAddr)
+
+			crypto, err := common.NewCrypto(secret)
+			if err != nil {
+				log.Printf("error creating crypto: %v\n", err)
+				return nil, err
+			}
+
+			s := session.NewSession(c.conn, addr)
+			s.InitSession(resp.Header.PeerIndex, crypto, serverPub)
+
+			return s, nil
+
+		case <-time.After(4 * time.Second):
+			continue
+		}
 	}
 
-	select {
-	case t := <-c.incoming:
-		resp := t.Packet
-		if resp.Header.PacketType != common.HANDSHAKE_RESPONSE {
-			return nil, err
-		}
-
-		var err error
-		serverPub, err := c.curve.NewPublicKey(resp.Payload)
-		if err != nil {
-			log.Printf("error creating new public key: %v\n", err)
-			return nil, err
-		}
-
-		secret, err := c.clientPrivateKey.ECDH(serverPub)
-		if err != nil {
-			log.Printf("error computing the secret: %v\n", err)
-			return nil, err
-		}
-
-		log.Printf("The shared secret for %v was computed!\n", remoteAddr)
-
-		crypto, err := common.NewCrypto(secret)
-		if err != nil {
-			log.Printf("error creating crypto: %v\n", err)
-			return nil, err
-		}
-
-		s := session.NewSession(c.conn, addr)
-		s.InitSession(resp.Header.PeerIndex, crypto, serverPub)
-
-		return s, nil
-
-	case <-time.After(4 * time.Second):
-		return nil, fmt.Errorf("Timeout.")
-	}
+	return nil, fmt.Errorf("error timeout: give up handshaking after five retries")
 }
 
 type Message struct {
