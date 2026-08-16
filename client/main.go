@@ -231,8 +231,12 @@ func (c *Client) listenTUN(tun *water.Interface) {
 				}
 
 				if !peer.Connected() {
-					// handshake
-					return fmt.Errorf("Peer not connected")
+					s, err := c.Handshake(peer.RemoteAddress.String())
+					if err != nil {
+						return err
+					}
+
+					peer.Session = s
 				}
 
 				peer.Session.Outgoing(buf[:n])

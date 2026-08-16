@@ -262,8 +262,6 @@ func (s *Server) Discover() {
 		result = append(result, buf[:]...)
 	}
 
-	log.Printf("len(result) == %v\n", len(result))
-
 	for _, session := range table {
 		session.TypedOutgoing(result, common.DISCOVER)
 	}
