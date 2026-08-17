@@ -23,7 +23,6 @@ import (
 
 type Client struct {
 	incoming chan Message
-	outgoing chan []byte
 	conn     *net.UDPConn
 
 	curve            ecdh.Curve
@@ -405,11 +404,9 @@ func main() {
 	log.Println("Listening on :8245")
 
 	incoming := make(chan Message, 1024)
-	outgoing := make(chan []byte, 1024)
 
 	client := Client{
 		conn:     conn,
-		outgoing: outgoing,
 		incoming: incoming,
 
 		curve:            curve,
