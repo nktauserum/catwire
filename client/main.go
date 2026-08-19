@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"sync"
 	"time"
 
 	"github.com/songgao/water"
@@ -22,8 +23,8 @@ import (
 )
 
 type Client struct {
-	incoming chan Message
-	conn     *net.UDPConn
+	conn *net.UDPConn
+	tun  *water.Interface
 
 	curve            ecdh.Curve
 	clientPrivateKey *ecdh.PrivateKey
@@ -31,20 +32,68 @@ type Client struct {
 
 	serverSession *session.Session
 
-	peerTable  routing.PeerTable
-	indexTable routing.IndexTable
+	peerTable     routing.PeerTable
+	incomingTable IncomingTable
 }
 
-func (c *Client) Handshake(remoteAddr string) (*session.Session, error) {
+type IncomingTable struct {
+	table []chan Message
+
+	mu sync.RWMutex
+}
+
+func NewIncomingTable() IncomingTable {
+	return IncomingTable{
+		table: make([]chan Message, 0, 8),
+	}
+}
+
+func (t *IncomingTable) Send(idx uint64, msg Message) {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	if idx > uint64(len(t.table)) {
+		return
+	}
+
+	t.table[idx] <- msg
+}
+
+func (t *IncomingTable) Get(idx uint64) (chan Message, error) {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	if idx > uint64(len(t.table)) {
+		return nil, fmt.Errorf("channel not fount by idx %v", idx)
+	}
+
+	return t.table[idx], nil
+}
+
+func (t *IncomingTable) Create() (uint64, chan Message) {
+	ch := make(chan Message, 1024)
+
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	idx := uint64(len(t.table))
+	t.table = append(t.table, ch)
+
+	return idx, ch
+}
+
+func (c *Client) Handshake(remoteAddr string) (*session.Session, chan Message, error) {
 	addr, err := net.ResolveUDPAddr("udp", remoteAddr)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
+
+	idx, ch := c.incomingTable.Create()
 
 	p := common.Packet{
 		Header: common.Header{
 			PacketType: common.HANDSHAKE_INIT,
-			PeerIndex:  0,
+			PeerIndex:  idx,
 			Counter:    0,
 		},
 		Payload: c.clientPublicKey.Bytes(),
@@ -55,11 +104,11 @@ func (c *Client) Handshake(remoteAddr string) (*session.Session, error) {
 		_, err = c.conn.WriteToUDP(encHandshake, addr)
 		if err != nil {
 			log.Printf("Error sending packet: %v\n", err)
-			return nil, err
+			return nil, nil, err
 		}
 
 		select {
-		case t := <-c.incoming:
+		case t := <-ch:
 			resp := t.Packet
 			if resp.Header.PacketType != common.HANDSHAKE_RESPONSE {
 				continue
@@ -69,13 +118,13 @@ func (c *Client) Handshake(remoteAddr string) (*session.Session, error) {
 			serverPub, err := c.curve.NewPublicKey(resp.Payload)
 			if err != nil {
 				log.Printf("error creating new public key: %v\n", err)
-				return nil, err
+				return nil, nil, err
 			}
 
 			secret, err := c.clientPrivateKey.ECDH(serverPub)
 			if err != nil {
 				log.Printf("error computing the secret: %v\n", err)
-				return nil, err
+				return nil, nil, err
 			}
 
 			log.Printf("The shared secret for %v was computed!\n", remoteAddr)
@@ -83,20 +132,20 @@ func (c *Client) Handshake(remoteAddr string) (*session.Session, error) {
 			crypto, err := common.NewCrypto(secret)
 			if err != nil {
 				log.Printf("error creating crypto: %v\n", err)
-				return nil, err
+				return nil, nil, err
 			}
 
 			s := session.NewSession(c.conn, addr)
 			s.InitSession(resp.Header.PeerIndex, crypto, serverPub)
 
-			return s, nil
+			return s, ch, nil
 
 		case <-time.After(4 * time.Second):
 			continue
 		}
 	}
 
-	return nil, fmt.Errorf("error timeout: give up handshaking after five retries")
+	return nil, nil, fmt.Errorf("timeout: give up handshaking after five retries")
 }
 
 type Message struct {
@@ -105,14 +154,16 @@ type Message struct {
 }
 
 func (c *Client) Start(serverAddr string) {
-	s, err := c.Handshake(serverAddr)
+	s, ch, err := c.Handshake(serverAddr)
 	if err != nil {
 		log.Fatalf("Handshake error: %v\n", err)
 	}
 
-	c.serverSession = s
+	c.StartPeerSession(s, ch)
+}
 
-	for t := range c.incoming {
+func (c *Client) StartPeerSession(session *session.Session, ch chan Message) {
+	for t := range ch {
 		p := t.Packet
 		switch p.Header.PacketType {
 		case common.DISCOVER:
@@ -156,8 +207,96 @@ func (c *Client) Start(serverAddr string) {
 				)
 			}
 
-		case common.HANDSHAKE_INIT:
-			key := base64.StdEncoding.EncodeToString(p.Payload)
+		case common.DATA:
+			decrypted, err := session.Incoming(p, nil)
+			if err != nil {
+				continue
+			}
+
+			if _, err = c.tun.Write(decrypted); err != nil {
+				log.Printf("error writing to TUN: %v\n", err)
+			}
+
+		default:
+			log.Printf("Unknown packet with type %v\n", p.Header.PacketType)
+		}
+	}
+}
+
+const ipAddr = "10.0.5.1"
+const subnetMask = (0xFFFFFFFF << (32 - 24)) & 0xFFFFFFFF // 24 as CIDR notation (0xFFFFFF00)
+var subnetAddr = getIPSubnet(common.IPAsInteger(ipAddr), subnetMask)
+
+func getIPSubnet(ip uint32, mask uint32) uint32 {
+	return ip & mask
+}
+
+func IPInLocalSubnet(ip uint32) bool {
+	return getIPSubnet(ip, subnetMask) == subnetAddr
+}
+
+var ErrNotConnected = fmt.Errorf("peer not connected")
+
+func (c *Client) listenTUN(tun *water.Interface) {
+	buf := make([]byte, 65535)
+
+	for {
+		n, err := tun.Read(buf)
+		if err != nil {
+			continue
+		}
+
+		destIP := common.ExtractDestinationIP(buf[:n])
+		if IPInLocalSubnet(destIP) && destIP != common.IPAsInteger(ipAddr) { // only if destIP owned by our virtual network and it isn't server's address (because it doesn't exist in IPLookupTable)
+			err := func() error {
+				peer, err := c.peerTable.Get(destIP)
+				if err != nil {
+					return err
+				}
+
+				if !peer.Connected() {
+					go c.Start(peer.RemoteAddress.String())
+					return ErrNotConnected
+				}
+
+				peer.Session.Outgoing(buf[:n])
+				log.Printf("Successfully sent to %v\n", peer.RemoteAddress.String())
+				return nil
+			}()
+			if err == nil {
+				continue
+			}
+			log.Printf("Error sending in local subnet: %v\n", err)
+		}
+
+		if c.serverSession == nil {
+			continue
+		}
+
+		c.serverSession.Outgoing(buf[:n])
+	}
+}
+
+func (c *Client) listenUDP() {
+	buf := make([]byte, 65535)
+
+	for {
+		n, clientAddr, err := c.conn.ReadFromUDP(buf)
+		if err != nil {
+			continue
+		}
+
+		data := make([]byte, n)
+		copy(data, buf[:n])
+
+		p, err := common.DecodePacket(data)
+		if err != nil {
+			continue
+		}
+
+		log.Printf("Packet: %#v\n", p)
+
+		if p.Header.PacketType == common.HANDSHAKE_INIT {
 			publicKey, err := c.curve.NewPublicKey(p.Payload)
 			if err != nil {
 				continue
@@ -180,8 +319,10 @@ func (c *Client) Start(serverAddr string) {
 			}
 
 			s := session.NewSession(c.conn, peer.RemoteAddress)
-			idx := c.indexTable.Store(key, s)
-			s.InitSession(idx, crypto, publicKey)
+			idx, ch := c.incomingTable.Create()
+			s.InitSession(p.Header.PeerIndex, crypto, publicKey)
+
+			peer.Session = s
 
 			log.Printf("The connection with %v is successfully created!\n", peer.RemoteAddress.String())
 
@@ -198,102 +339,10 @@ func (c *Client) Start(serverAddr string) {
 
 			s.Send(enc) // вызываем внутреннюю функцию Session для отправки байтов сразу в UDP
 
-		default:
-			log.Printf("Unknown packet with type %v\n", p.Header.PacketType)
-		}
-	}
-}
-
-const ipAddr = "10.0.5.1"
-const subnetMask = (0xFFFFFFFF << (32 - 24)) & 0xFFFFFFFF // 24 as CIDR notation (0xFFFFFF00)
-var subnetAddr = getIPSubnet(common.IPAsInteger(ipAddr), subnetMask)
-
-func getIPSubnet(ip uint32, mask uint32) uint32 {
-	return ip & mask
-}
-
-func IPInLocalSubnet(ip uint32) bool {
-	return getIPSubnet(ip, subnetMask) == subnetAddr
-}
-
-func (c *Client) listenTUN(tun *water.Interface) {
-	buf := make([]byte, 65535)
-
-	for {
-		n, err := tun.Read(buf)
-		if err != nil {
-			continue
+			go c.StartPeerSession(s, ch)
 		}
 
-		destIP := common.ExtractDestinationIP(buf[:n])
-		if IPInLocalSubnet(destIP) && destIP != common.IPAsInteger(ipAddr) { // only if destIP owned by our virtual network and it isn't server's address (because it doesn't exist in IPLookupTable)
-			err := func() error {
-				peer, err := c.peerTable.Get(destIP)
-				if err != nil {
-					return err
-				}
-
-				if !peer.Connected() {
-					s, err := c.Handshake(peer.RemoteAddress.String())
-					if err != nil {
-						return err
-					}
-
-					peer.Session = s
-				}
-
-				peer.Session.Outgoing(buf[:n])
-				log.Printf("Successfully sent to %v\n", peer.RemoteAddress.String())
-				return nil
-			}()
-			if err == nil {
-				continue
-			}
-			log.Printf("Error sending in local subnet: %v\n", err)
-		}
-
-		if c.serverSession == nil {
-			continue
-		}
-
-		c.serverSession.Outgoing(buf[:n])
-	}
-}
-
-func (c *Client) listenUDP(tun *water.Interface) {
-	buf := make([]byte, 65535)
-
-	for {
-		n, clientAddr, err := c.conn.ReadFromUDP(buf)
-		if err != nil {
-			continue
-		}
-
-		data := make([]byte, n)
-		copy(data, buf[:n])
-
-		p, err := common.DecodePacket(data)
-		if err != nil {
-			continue
-		}
-
-		if p.Header.PacketType == common.DATA {
-			if c.serverSession == nil {
-				continue
-			}
-
-			decrypted, err := c.serverSession.Incoming(p, nil)
-			if err != nil {
-				continue
-			}
-
-			if _, err = tun.Write(decrypted); err != nil {
-				log.Printf("error writing to TUN: %v\n", err)
-			}
-			continue
-		}
-
-		c.incoming <- Message{Packet: p, ClientAddr: clientAddr}
+		c.incomingTable.Send(p.Header.PeerIndex, Message{Packet: p, ClientAddr: clientAddr})
 	}
 }
 
@@ -403,22 +452,20 @@ func main() {
 
 	log.Println("Listening on :8245")
 
-	incoming := make(chan Message, 1024)
-
 	client := Client{
 		conn:     conn,
-		incoming: incoming,
+		tun: tun,
 
 		curve:            curve,
 		clientPrivateKey: clientPrivateKey,
 		clientPublicKey:  clientPublicKey,
 
 		peerTable:  routing.NewPeerTable(),
-		indexTable: routing.NewIndexTable(1),
+		incomingTable: NewIncomingTable(),
 	}
 
 	// start send loop
-	go client.listenUDP(tun)
+	go client.listenUDP()
 	go client.listenTUN(tun)
 
 	go client.Start(config.ServerAddr)
