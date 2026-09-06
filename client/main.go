@@ -133,10 +133,6 @@ func (c *Client) listenUDP() {
 			continue
 		}
 
-		if !c.serverSession.Initialized() {
-			continue
-		}
-
 		data := make([]byte, n)
 		copy(data, buf[:n])
 
@@ -146,6 +142,14 @@ func (c *Client) listenUDP() {
 		}
 
 		if p.Header.PacketType == common.DATA {
+			if c.serverSession == nil {
+				continue
+			}
+
+			if !c.serverSession.Initialized() {
+				continue		
+			}
+
 			decrypted, err := c.serverSession.Incoming(p, nil)
 			if err != nil {
 				continue
