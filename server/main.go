@@ -3,7 +3,6 @@ package main
 import (
 	"crypto/ecdh"
 	"encoding/base64"
-	"encoding/binary"
 	"flag"
 	"fmt"
 	"log"
@@ -146,7 +145,7 @@ func (server *Server) listenUDP() {
 
 					resp := common.Packet{
 						Header: common.Header{
-							PacketType: common.HANDSHAKE_RESPONSE,
+							PacketType: common.HANDSHAKE_INIT,
 							PeerIndex:  idx,
 							Counter:    s.Counter.Add(1) - 1,
 						},
@@ -156,9 +155,6 @@ func (server *Server) listenUDP() {
 					enc := common.EncodePacket(resp)
 
 					s.Send(enc) // вызываем внутреннюю функцию Session для отправки байтов сразу в UDP
-
-					// здесь делаем Discover
-					server.Discover()
 				}
 
 				pool.Put(t.Data)
@@ -229,41 +225,6 @@ func sendTUN(tun *water.Interface, outgoing chan []byte) {
 		if _, err := tun.Write(data); err != nil {
 			log.Println("sendTUN: ", err)
 		}
-	}
-}
-
-func (s *Server) Discover() {
-	// entry: 	 private addr | public address | port | public key
-	entrySize := 4 + 4 + 2 + 32
-
-	table := s.IPLookupTable.Copy()
-	if len(table) == 0 {
-		return
-	}
-
-	result := make([]byte, 0, entrySize*len(table))
-	for addr, session := range table {
-		buf := [42]byte{0} // hardcoded here for a reason
-		host, p, err := net.SplitHostPort(session.RemoteAddr())
-		if err != nil {
-			continue
-		}
-
-		port, err := strconv.Atoi(p)
-		if err != nil {
-			continue
-		}
-
-		binary.BigEndian.PutUint32(buf[:], addr)
-		binary.BigEndian.PutUint32(buf[4:8], common.IPAsInteger(host))
-		binary.BigEndian.PutUint16(buf[8:10], uint16(port))
-		copy(buf[10:], session.PublicKey.Bytes())
-
-		result = append(result, buf[:]...)
-	}
-
-	for _, session := range table {
-		session.TypedOutgoing(result, common.DISCOVER)
 	}
 }
 
