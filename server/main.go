@@ -33,6 +33,7 @@ type Server struct {
 	outgoing chan []byte
 
 	conn *net.UDPConn
+	tun *water.Interface
 }
 
 type Task struct {
@@ -98,7 +99,10 @@ func (server *Server) listenUDP() {
 						continue
 					}
 
-					server.outgoing <- payload
+					if _, err := server.tun.Write(payload); err != nil {
+						log.Println("sendTUN: ", err)
+					}
+
 					pool.Put(t.Data)
 					continue
 				}
@@ -220,14 +224,6 @@ func (server *Server) listenTUN(tun *water.Interface) {
 	}
 }
 
-func sendTUN(tun *water.Interface, outgoing chan []byte) {
-	for data := range outgoing {
-		if _, err := tun.Write(data); err != nil {
-			log.Println("sendTUN: ", err)
-		}
-	}
-}
-
 func main() {
 	var configPath string
 	flag.StringVar(&configPath, "config", "", "Path to config")
@@ -305,6 +301,7 @@ func main() {
 
 	s := Server{
 		conn:     conn,
+		tun: tun,
 		outgoing: outgoing,
 
 		curve:            curve,
@@ -316,7 +313,6 @@ func main() {
 		AllowedIPs:       allowedIPs,
 	}
 
-	go sendTUN(tun, outgoing)
 	go s.listenTUN(tun)
 
 	log.Printf("Listening on :%d\n", config.ListenPort)
