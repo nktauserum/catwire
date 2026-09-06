@@ -24,12 +24,12 @@ func (t *AddressTable) Store(clientIP uint32, session *session.Session) {
 	t.mu.Unlock()
 }
 
-func (t *AddressTable) Load(destIP uint32) *session.Session {
+func (t *AddressTable) Load(destIP uint32) (*session.Session, bool) {
 	t.mu.RLock()
-	s := t.lookupTable[destIP]
+	s, exists := t.lookupTable[destIP]
 	t.mu.RUnlock()
 
-	return s
+	return s, exists
 }
 
 func (t *AddressTable) Copy() map[uint32]*session.Session {
