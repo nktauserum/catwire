@@ -13,18 +13,18 @@ import (
 	"sync"
 
 	"github.com/nktauserum/catwire/common"
+	"github.com/nktauserum/catwire/common/routing"
+	"github.com/nktauserum/catwire/common/session"
 	"github.com/nktauserum/catwire/server/config"
-	"github.com/nktauserum/catwire/server/routing"
-	"github.com/nktauserum/catwire/server/session"
 	"github.com/songgao/water"
 )
 
 const ipAddr = "10.0.5.1"
 
 type Server struct {
-	IndexLookupTable routing.PeerIndices
+	IndexLookupTable routing.IndexTable
 	AllowedIPs       map[string]uint32
-	IPLookupTable    routing.PeerRouting
+	IPLookupTable    routing.AddressTable
 
 	curve            ecdh.Curve
 	serverPrivateKey *ecdh.PrivateKey
@@ -141,7 +141,7 @@ func (server *Server) listenUDP() {
 					idx := server.IndexLookupTable.Store(key, s)
 					server.IPLookupTable.Store(clientIP, s)
 
-					s.InitSession(idx, clientPublicKey, crypto)
+					s.InitSession(idx, crypto, clientPublicKey)
 
 					resp := common.Packet{
 						Header: common.Header{
@@ -311,8 +311,8 @@ func main() {
 		serverPrivateKey: serverPrivateKey,
 		serverPublicKey:  serverPublicKey,
 
-		IPLookupTable:    routing.NewPeerRouting(),
-		IndexLookupTable: routing.NewPeerIndices(len(allowedIPs)),
+		IPLookupTable:    routing.NewAddressTable(),
+		IndexLookupTable: routing.NewIndexTable(len(allowedIPs)),
 		AllowedIPs:       allowedIPs,
 	}
 

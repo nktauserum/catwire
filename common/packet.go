@@ -8,6 +8,8 @@ import (
 const (
 	DATA uint8 = iota
 	HANDSHAKE_INIT
+	HANDSHAKE_RESPONSE
+	DISCOVER
 )
 
 var ErrTooShortPacket error = fmt.Errorf("the provided packet was smaller than 17 bytes")

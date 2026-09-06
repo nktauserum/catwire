@@ -4,21 +4,24 @@ import (
 	"crypto/ecdh"
 	"log"
 	"net"
+	"sync"
 	"sync/atomic"
 
 	"github.com/nktauserum/catwire/common"
 )
 
 type Session struct {
-	PublicKey *ecdh.PublicKey
-	secret    []byte
-	crypto    *common.Crypto
-	Counter   atomic.Uint64
+	secret  []byte
+	crypto  *common.Crypto
+	Counter atomic.Uint64
 
 	remoteAddr atomic.Pointer[net.UDPAddr]
 	conn       *net.UDPConn
+	PublicKey  *ecdh.PublicKey
 
 	PeerIndex uint64
+
+	mu sync.RWMutex
 }
 
 func NewSession(
@@ -35,12 +38,22 @@ func NewSession(
 
 func (s *Session) InitSession(
 	idx uint64,
-	key *ecdh.PublicKey,
 	crypto *common.Crypto,
+	publicKey *ecdh.PublicKey,
 ) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	s.PeerIndex = idx
 	s.crypto = crypto
-	s.PublicKey = key
+	s.PublicKey = publicKey
+}
+
+func (s *Session) Initialized() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return s.crypto != nil
 }
 
 func (s *Session) Send(data []byte) {
@@ -57,12 +70,14 @@ func (s *Session) Incoming(p common.Packet, remoteAddr *net.UDPAddr) ([]byte, er
 		return nil, err
 	}
 
-	s.remoteAddr.Store(remoteAddr)
+	if remoteAddr != nil {
+		s.remoteAddr.Store(remoteAddr)
+	}
 
 	return decrypted, nil
 }
 
-func (s *Session) Outgoing(data []byte) {
+func (s *Session) TypedOutgoing(data []byte, packetType uint8) {
 	counter := s.Counter.Add(1) - 1
 
 	encrypted, err := s.crypto.Encrypt(data, counter)
@@ -73,7 +88,7 @@ func (s *Session) Outgoing(data []byte) {
 
 	p := common.Packet{
 		Header: common.Header{
-			PacketType: common.DATA,
+			PacketType: packetType,
 			PeerIndex:  s.PeerIndex,
 			Counter:    counter,
 		},
@@ -82,4 +97,12 @@ func (s *Session) Outgoing(data []byte) {
 
 	encoded := common.EncodePacket(p)
 	s.Send(encoded) // directly to UDP
+}
+
+func (s *Session) Outgoing(data []byte) {
+	s.TypedOutgoing(data, common.DATA)
+}
+
+func (s *Session) RemoteAddr() string {
+	return s.remoteAddr.Load().String()
 }
