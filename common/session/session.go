@@ -6,13 +6,14 @@ import (
 	"net"
 	"sync"
 	"sync/atomic"
+	"crypto/cipher"
 
 	"github.com/nktauserum/catwire/common"
 )
 
 type Session struct {
 	secret  []byte
-	crypto  *common.Crypto
+	aesGCM cipher.AEAD
 	Counter atomic.Uint64
 
 	remoteAddr atomic.Pointer[net.UDPAddr]
@@ -38,22 +39,22 @@ func NewSession(
 
 func (s *Session) InitSession(
 	idx uint64,
-	crypto *common.Crypto,
+	aesGCM cipher.AEAD,
 	publicKey *ecdh.PublicKey,
 ) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	s.PeerIndex = idx
-	s.crypto = crypto
 	s.PublicKey = publicKey
+	s.aesGCM = aesGCM 
 }
 
 func (s *Session) Initialized() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	return s.crypto != nil
+	return s.aesGCM != nil
 }
 
 func (s *Session) Send(data []byte) {
@@ -65,7 +66,8 @@ func (s *Session) Send(data []byte) {
 }
 
 func (s *Session) Incoming(p common.Packet, remoteAddr *net.UDPAddr) ([]byte, error) {
-	decrypted, err := s.crypto.Decrypt(p.Payload, p.Header.Counter)
+	nonce := common.MakeNonce(p.Header.Counter)
+	decrypted, err := s.aesGCM.Open(nil, nonce[:], p.Payload, nil) 
 	if err != nil {
 		return nil, err
 	}
@@ -80,11 +82,8 @@ func (s *Session) Incoming(p common.Packet, remoteAddr *net.UDPAddr) ([]byte, er
 func (s *Session) TypedOutgoing(data []byte, packetType uint8) {
 	counter := s.Counter.Add(1) - 1
 
-	encrypted, err := s.crypto.Encrypt(data, counter)
-	if err != nil {
-		log.Printf("Error encrypt packet: %v\n", err)
-		return
-	}
+	nonce := common.MakeNonce(counter)
+	encrypted := s.aesGCM.Seal(nil, nonce[:], data, nil) 
 
 	p := common.Packet{
 		Header: common.Header{

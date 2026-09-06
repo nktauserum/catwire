@@ -131,9 +131,9 @@ func (server *Server) listenUDP() {
 
 					log.Printf("The shared secret for %v was computed!\n", t.ClientAddr)
 
-					crypto, err := common.NewCrypto(secret)
+					aesGCM, err := common.SetupEncryption(secret)
 					if err != nil {
-						log.Printf("error creating crypto: %v\n", err)
+						log.Printf("error setting encryption up: %v\n", err)
 						pool.Put(t.Data)
 						continue
 					}
@@ -141,7 +141,7 @@ func (server *Server) listenUDP() {
 					idx := server.IndexLookupTable.Store(key, s)
 					server.IPLookupTable.Store(clientIP, s)
 
-					s.InitSession(idx, crypto, clientPublicKey)
+					s.InitSession(idx, aesGCM, clientPublicKey)
 
 					resp := common.Packet{
 						Header: common.Header{

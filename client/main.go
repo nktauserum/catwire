@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"sync/atomic"
 	"time"
 
 	"github.com/songgao/water"
@@ -28,6 +29,7 @@ type Client struct {
 	clientPublicKey  *ecdh.PublicKey
 
 	serverSession *session.Session
+	lastPacket    atomic.Uint32
 	incoming      chan common.Packet
 }
 
@@ -75,14 +77,14 @@ func (c *Client) Handshake(remoteAddr string) error {
 
 			log.Printf("The shared secret for %v was computed!\n", remoteAddr)
 
-			crypto, err := common.NewCrypto(secret)
+			aesGCM, err := common.SetupEncryption(secret)
 			if err != nil {
-				log.Printf("error creating crypto: %v\n", err)
-				return err
+				log.Printf("error setting encryption up: %v\n", err)
+				continue
 			}
 
 			s := session.NewSession(c.conn, addr)
-			s.InitSession(resp.Header.PeerIndex, crypto, serverPub)
+			s.InitSession(resp.Header.PeerIndex, aesGCM, serverPub)
 
 			c.serverSession = s
 
@@ -102,9 +104,7 @@ func (c *Client) Start(serverAddr string) {
 		log.Fatalf("Handshake error: %v\n", err)
 	}
 
-	for p := range c.incoming {
-		log.Printf("Unknown packet: %#v\n", p)
-	}
+	select {}
 }
 
 func (c *Client) listenTUN(tun *water.Interface) {
