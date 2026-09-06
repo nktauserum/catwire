@@ -133,6 +133,10 @@ func (c *Client) listenUDP() {
 			continue
 		}
 
+		if !c.serverSession.Initialized() {
+			continue
+		}
+
 		data := make([]byte, n)
 		copy(data, buf[:n])
 
