@@ -1,19 +1,19 @@
 package session
 
 import (
+	"crypto/cipher"
 	"crypto/ecdh"
 	"log"
 	"net"
 	"sync"
 	"sync/atomic"
-	"crypto/cipher"
 
 	"github.com/nktauserum/catwire/common"
 )
 
 type Session struct {
 	secret  []byte
-	aesGCM cipher.AEAD
+	aesGCM  cipher.AEAD
 	Counter atomic.Uint64
 
 	remoteAddr atomic.Pointer[net.UDPAddr]
@@ -47,7 +47,7 @@ func (s *Session) InitSession(
 
 	s.PeerIndex = idx
 	s.PublicKey = publicKey
-	s.aesGCM = aesGCM 
+	s.aesGCM = aesGCM
 }
 
 func (s *Session) Initialized() bool {
@@ -67,7 +67,7 @@ func (s *Session) Send(data []byte) {
 
 func (s *Session) Incoming(p common.Packet, remoteAddr *net.UDPAddr) ([]byte, error) {
 	nonce := common.MakeNonce(p.Header.Counter)
-	decrypted, err := s.aesGCM.Open(nil, nonce[:], p.Payload, nil) 
+	decrypted, err := s.aesGCM.Open(nil, nonce[:], p.Payload, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +83,7 @@ func (s *Session) TypedOutgoing(data []byte, packetType uint8) {
 	counter := s.Counter.Add(1) - 1
 
 	nonce := common.MakeNonce(counter)
-	encrypted := s.aesGCM.Seal(nil, nonce[:], data, nil) 
+	encrypted := s.aesGCM.Seal(nil, nonce[:], data, nil)
 
 	p := common.Packet{
 		Header: common.Header{

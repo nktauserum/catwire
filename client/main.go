@@ -147,7 +147,7 @@ func (c *Client) listenUDP() {
 			}
 
 			if !c.serverSession.Initialized() {
-				continue		
+				continue
 			}
 
 			decrypted, err := c.serverSession.Incoming(p, nil)

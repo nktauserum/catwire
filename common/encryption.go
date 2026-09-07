@@ -30,4 +30,3 @@ func SetupEncryption(secret []byte) (cipher.AEAD, error) {
 
 	return cipher.NewGCM(block)
 }
-
