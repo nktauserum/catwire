@@ -76,7 +76,7 @@ func (s *Session) Send(data []byte) {
 
 func (s *Session) Incoming(p common.Packet, remoteAddr *net.UDPAddr) {
 	buf := s.pool.Get().(*[]byte)
-	*buf = (*buf)[:len(p.Payload)-s.aesGCM.Overhead()]
+	*buf = (*buf)[:0]
 
 	nonce := common.MakeNonce(p.Header.Counter)
 	payload, err := s.aesGCM.Open(*buf, nonce[:], p.Payload, nil)
