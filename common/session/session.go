@@ -3,7 +3,6 @@ package session
 import (
 	"crypto/cipher"
 	"crypto/ecdh"
-	"log"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -17,20 +16,25 @@ type Session struct {
 	Counter atomic.Uint64
 
 	remoteAddr atomic.Pointer[net.UDPAddr]
-	conn       *net.UDPConn
 	PublicKey  *ecdh.PublicKey
 
 	PeerIndex uint64
 
-	mu sync.RWMutex
+	mu   sync.RWMutex
+	pool sync.Pool
+
+	incomingFunc IncomingCallback
+	outgoingFunc OutgoingCallback
 }
 
 func NewSession(
-	conn *net.UDPConn,
+	inc IncomingCallback,
+	out OutgoingCallback,
 	addr *net.UDPAddr,
 ) *Session {
 	s := &Session{
-		conn: conn,
+		incomingFunc: inc,
+		outgoingFunc: out,
 	}
 
 	s.remoteAddr.Store(addr)
@@ -44,6 +48,13 @@ func (s *Session) InitSession(
 ) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	s.pool = sync.Pool{
+		New: func() any {
+			b := make([]byte, 65535+aesGCM.Overhead()) // + AES overhead
+			return &b
+		},
+	}
 
 	s.PeerIndex = idx
 	s.PublicKey = publicKey
@@ -59,31 +70,35 @@ func (s *Session) Initialized() bool {
 
 func (s *Session) Send(data []byte) {
 	if clientAddr := s.remoteAddr.Load(); clientAddr != nil {
-		if _, err := s.conn.WriteToUDP(data, clientAddr); err != nil {
-			log.Println("write: ", err)
-		}
+		s.outgoingFunc(data, clientAddr)
 	}
 }
 
-func (s *Session) Incoming(p common.Packet, remoteAddr *net.UDPAddr) ([]byte, error) {
+func (s *Session) Incoming(p common.Packet, remoteAddr *net.UDPAddr) {
+	buf := s.pool.Get().(*[]byte)
+	*buf = (*buf)[:len(p.Payload)-s.aesGCM.Overhead()]
+
 	nonce := common.MakeNonce(p.Header.Counter)
-	decrypted, err := s.aesGCM.Open(nil, nonce[:], p.Payload, nil)
+	payload, err := s.aesGCM.Open(*buf, nonce[:], p.Payload, nil)
 	if err != nil {
-		return nil, err
+		return
 	}
 
 	if remoteAddr != nil {
 		s.remoteAddr.Store(remoteAddr)
 	}
 
-	return decrypted, nil
+	s.incomingFunc(payload)
+	s.pool.Put(buf)
 }
 
 func (s *Session) TypedOutgoing(data []byte, packetType uint8) {
-	counter := s.Counter.Add(1) - 1
+	buf := s.pool.Get().(*[]byte)
+	*buf = (*buf)[:0]
 
+	counter := s.Counter.Add(1) - 1
 	nonce := common.MakeNonce(counter)
-	encrypted := s.aesGCM.Seal(nil, nonce[:], data, nil)
+	encrypted := s.aesGCM.Seal(*buf, nonce[:], data, nil)
 
 	p := common.Packet{
 		Header: common.Header{
@@ -96,6 +111,7 @@ func (s *Session) TypedOutgoing(data []byte, packetType uint8) {
 
 	encoded := common.EncodePacket(p)
 	s.Send(encoded) // directly to UDP
+	s.pool.Put(buf)
 }
 
 func (s *Session) Outgoing(data []byte) {

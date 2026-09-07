@@ -52,6 +52,31 @@ func IPInLocalSubnet(ip uint32) bool {
 	return getIPSubnet(ip, subnetMask) == subnetAddr
 }
 
+func (server *Server) incomingCallback(payload []byte) {
+	log.Printf("len(payload) == %v\n", len(payload))
+
+	destIP := common.ExtractDestinationIP(payload)
+	if IPInLocalSubnet(destIP) && destIP != common.IPAsInteger(ipAddr) { // only if destIP owned by our virtual network and it isn't server's address (because it doesn't exist in IPLookupTable)
+		dstSession, exists := server.IPLookupTable.Load(destIP)
+		if !exists {
+			return
+		}
+
+		dstSession.Outgoing(payload)
+		return
+	}
+
+	if _, err := server.tun.Write(payload); err != nil {
+		log.Println("sendTUN: ", err)
+	}
+}
+
+func (server *Server) outgoingCallback(data []byte, clientAddr *net.UDPAddr) {
+	if _, err := server.conn.WriteToUDP(data, clientAddr); err != nil {
+		log.Println("write: ", err)
+	}
+}
+
 func (server *Server) listenUDP() {
 	buf := make([]byte, 65535)
 	pool := sync.Pool{
@@ -80,28 +105,7 @@ func (server *Server) listenUDP() {
 						continue
 					}
 
-					payload, err := session.Incoming(p, t.ClientAddr)
-					if err != nil {
-						pool.Put(t.Data)
-						continue
-					}
-
-					destIP := common.ExtractDestinationIP(payload)
-					if IPInLocalSubnet(destIP) && destIP != common.IPAsInteger(ipAddr) { // only if destIP owned by our virtual network and it isn't server's address (because it doesn't exist in IPLookupTable)
-						session, exists := server.IPLookupTable.Load(destIP)
-						if !exists {
-							pool.Put(t.Data)
-							continue
-						}
-
-						session.Outgoing(payload)
-						pool.Put(t.Data)
-						continue
-					}
-
-					if _, err := server.tun.Write(payload); err != nil {
-						log.Println("sendTUN: ", err)
-					}
+					session.Incoming(p, t.ClientAddr)
 
 					pool.Put(t.Data)
 					continue
@@ -116,7 +120,7 @@ func (server *Server) listenUDP() {
 				key := base64.StdEncoding.EncodeToString(p.Payload)
 				clientIP, exists := server.AllowedIPs[key]
 				if exists {
-					s := session.NewSession(server.conn, t.ClientAddr)
+					s := session.NewSession(server.incomingCallback, server.outgoingCallback, t.ClientAddr)
 
 					var err error
 					clientPublicKey, err := server.curve.NewPublicKey(p.Payload)

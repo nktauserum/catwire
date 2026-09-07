@@ -33,6 +33,18 @@ type Client struct {
 	incoming      chan common.Packet
 }
 
+func (c *Client) incomingCallback(payload []byte) {
+	if _, err := c.tun.Write(payload); err != nil {
+		log.Println("incomingCallback: tun.Write: ", err)
+	}
+}
+
+func (c *Client) outgoingCallback(data []byte, clientAddr *net.UDPAddr) {
+	if _, err := c.conn.WriteToUDP(data, clientAddr); err != nil {
+		log.Println("write: ", err)
+	}
+}
+
 func (c *Client) Handshake(remoteAddr string) error {
 	addr, err := net.ResolveUDPAddr("udp", remoteAddr)
 	if err != nil {
@@ -83,7 +95,7 @@ func (c *Client) Handshake(remoteAddr string) error {
 				continue
 			}
 
-			s := session.NewSession(c.conn, addr)
+			s := session.NewSession(c.incomingCallback, c.outgoingCallback, addr)
 			s.InitSession(resp.Header.PeerIndex, aesGCM, serverPub)
 
 			c.serverSession = s
@@ -150,14 +162,7 @@ func (c *Client) listenUDP() {
 				continue
 			}
 
-			decrypted, err := c.serverSession.Incoming(p, nil)
-			if err != nil {
-				continue
-			}
-
-			if _, err = c.tun.Write(decrypted); err != nil {
-				log.Printf("error writing to TUN: %v\n", err)
-			}
+			c.serverSession.Incoming(p, nil)
 
 			continue
 		}
