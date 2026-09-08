@@ -85,7 +85,10 @@ func (s *Session) Incoming(p common.Packet, remoteAddr *net.UDPAddr) {
 	}
 
 	if remoteAddr != nil {
-		s.remoteAddr.Store(remoteAddr)
+		ex := s.remoteAddr.Load()
+		if ex == nil || ex == remoteAddr {
+			s.remoteAddr.Store(remoteAddr)
+		}
 	}
 
 	s.incomingFunc(payload)
