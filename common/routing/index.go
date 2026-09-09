@@ -10,7 +10,7 @@ import (
 
 type IndexTable struct {
 	lookupTable []*session.Session
-	mu          sync.Mutex
+	mu          sync.RWMutex
 }
 
 func NewIndexTable(cap int) IndexTable {
@@ -20,8 +20,8 @@ func NewIndexTable(cap int) IndexTable {
 }
 
 func (t *IndexTable) Load(peerIndex uint64) (*session.Session, error) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
+	t.mu.RLock()
+	defer t.mu.RUnlock()
 
 	p := peerIndex - 1
 
@@ -30,7 +30,6 @@ func (t *IndexTable) Load(peerIndex uint64) (*session.Session, error) {
 	}
 
 	s := t.lookupTable[p]
-
 	if s == nil {
 		return nil, fmt.Errorf("equals nil")
 	}
