@@ -251,6 +251,7 @@ func main() {
 	cmds := [][]string{
 		{"ip", "link", "set", tun.Name(), "up"},
 		{"ip", "addr", "add", config.PeerAddr + "/32", "dev", tun.Name()},
+		{"ip", "link", "set", "dev", tun.Name(), "mtu", "1420"},
 		{"ip", "route", "replace", "10.0.5.0/24", "dev", tun.Name()},
 	}
 
