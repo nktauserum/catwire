@@ -95,7 +95,7 @@ func (s *Session) Incoming(p common.Packet, remoteAddr *net.UDPAddr) {
 	s.pool.Put(buf)
 }
 
-func (s *Session) TypedOutgoing(data []byte, packetType uint8) {
+func (s *Session) Outgoing(data []byte) {
 	buf := s.pool.Get().(*[]byte)
 	*buf = (*buf)[:0]
 
@@ -105,7 +105,7 @@ func (s *Session) TypedOutgoing(data []byte, packetType uint8) {
 
 	p := common.Packet{
 		Header: common.Header{
-			PacketType: packetType,
+			PacketType: common.DATA,
 			PeerIndex:  s.PeerIndex,
 			Counter:    counter,
 		},
@@ -115,10 +115,6 @@ func (s *Session) TypedOutgoing(data []byte, packetType uint8) {
 	encoded := common.EncodePacket(p)
 	s.Send(encoded) // directly to UDP
 	s.pool.Put(buf)
-}
-
-func (s *Session) Outgoing(data []byte) {
-	s.TypedOutgoing(data, common.DATA)
 }
 
 func (s *Session) RemoteAddr() string {

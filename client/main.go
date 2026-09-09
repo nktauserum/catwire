@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -121,6 +122,28 @@ func (c *Client) Start(serverAddr string) {
 
 func (c *Client) listenTUN(tun *water.Interface) {
 	buf := make([]byte, 65535)
+	pool := sync.Pool{
+		New: func() any {
+			b := make([]byte, 65535)
+			return &b
+		},
+	}
+	ch := make(chan *[]byte, 1024)
+
+	workersCount := 32
+	for range workersCount {
+		go func() {
+			for p := range ch {
+				if c.serverSession == nil {
+					pool.Put(p)
+					continue
+				}
+
+				c.serverSession.Outgoing(*p)
+				pool.Put(p)
+			}
+		}()
+	}
 
 	for {
 		n, err := tun.Read(buf)
@@ -128,16 +151,55 @@ func (c *Client) listenTUN(tun *water.Interface) {
 			continue
 		}
 
-		if c.serverSession == nil {
-			continue
-		}
+		data := pool.Get().(*[]byte)
+		*data = (*data)[:n]
+		copy(*data, buf[:n])
 
-		c.serverSession.Outgoing(buf[:n])
+		ch <- data
 	}
 }
 
 func (c *Client) listenUDP() {
 	buf := make([]byte, 65535)
+	pool := sync.Pool{
+		New: func() any {
+			b := make([]byte, 65535)
+			return &b
+		},
+	}
+	ch := make(chan *[]byte, 1024)
+
+
+	workersCount := 32
+	for range workersCount {
+		go func() {
+			for data := range ch {
+				p, err := common.DecodePacket(*data)
+				if err != nil {
+					pool.Put(data)
+					continue
+				}
+
+				if p.Header.PacketType == common.DATA {
+					if c.serverSession == nil {
+						pool.Put(data)
+						continue
+					}
+
+					if !c.serverSession.Initialized() {
+						pool.Put(data)
+						continue
+					}
+
+					c.serverSession.Incoming(p, nil)
+					pool.Put(data)
+					continue
+				}
+
+				c.incoming <- p // pool leak (perhaps, acceptable?)
+			}
+		}()
+	}
 
 	for {
 		n, _, err := c.conn.ReadFromUDP(buf)
@@ -145,29 +207,11 @@ func (c *Client) listenUDP() {
 			continue
 		}
 
-		data := make([]byte, n)
-		copy(data, buf[:n])
+		data := pool.Get().(*[]byte)
+		*data = (*data)[:n]
+		copy(*data, buf[:n])
 
-		p, err := common.DecodePacket(data)
-		if err != nil {
-			continue
-		}
-
-		if p.Header.PacketType == common.DATA {
-			if c.serverSession == nil {
-				continue
-			}
-
-			if !c.serverSession.Initialized() {
-				continue
-			}
-
-			c.serverSession.Incoming(p, nil)
-
-			continue
-		}
-
-		c.incoming <- p
+		ch <- data
 	}
 }
 
@@ -207,6 +251,7 @@ func main() {
 	cmds := [][]string{
 		{"ip", "link", "set", tun.Name(), "up"},
 		{"ip", "addr", "add", config.PeerAddr + "/32", "dev", tun.Name()},
+		{"ip", "link", "set", "dev", tun.Name(), "mtu", "1420"},
 		{"ip", "route", "replace", "10.0.5.0/24", "dev", tun.Name()},
 	}
 

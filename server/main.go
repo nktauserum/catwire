@@ -255,7 +255,7 @@ func main() {
 	cmds := [][]string{
 		{"ip", "link", "set", tun.Name(), "up"},
 		{"ip", "addr", "add", ipAddr + "/24", "dev", tun.Name()},
-		{"ip", "link", "set", "dev", tun.Name()},
+		{"ip", "link", "set", "dev", tun.Name(), "mtu", "1420"},
 		{"iptables", "-t", "nat", "-A", "POSTROUTING", "-o", "eth0", "-j", "MASQUERADE"},
 		{"iptables", "-A", "FORWARD", "-i", tun.Name(), "-j", "ACCEPT"},
 		{"iptables", "-A", "FORWARD", "-o", tun.Name(), "-j", "ACCEPT"},
