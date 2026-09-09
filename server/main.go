@@ -201,7 +201,7 @@ func (server *Server) listenTUN(tun *water.Interface) {
 			for data := range ch {
 				destIP := common.ExtractDestinationIP(*data)
 				session, exists := server.IPLookupTable.Load(destIP)
-				if !exists && !session.Initialized() {
+				if !exists || !session.Initialized() {
 					pool.Put(data)
 					continue
 				}
