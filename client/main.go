@@ -135,6 +135,7 @@ func (c *Client) listenTUN(tun *water.Interface) {
 		go func() {
 			for p := range ch {
 				if c.serverSession == nil {
+					pool.Put(p)
 					continue
 				}
 
