@@ -53,8 +53,6 @@ func IPInLocalSubnet(ip uint32) bool {
 }
 
 func (server *Server) incomingCallback(payload []byte) {
-	log.Printf("len(payload) == %v\n", len(payload))
-
 	destIP := common.ExtractDestinationIP(payload)
 	if IPInLocalSubnet(destIP) && destIP != common.IPAsInteger(ipAddr) { // only if destIP owned by our virtual network and it isn't server's address (because it doesn't exist in IPLookupTable)
 		dstSession, exists := server.IPLookupTable.Load(destIP)
