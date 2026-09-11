@@ -10,6 +10,8 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"runtime"
+	"runtime/pprof"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -20,6 +22,8 @@ import (
 	"github.com/nktauserum/catwire/common"
 	"github.com/nktauserum/catwire/common/session"
 )
+
+var workersCount = runtime.NumCPU()
 
 type Client struct {
 	conn *net.UDPConn
@@ -130,7 +134,6 @@ func (c *Client) listenTUN(tun *water.Interface) {
 	}
 	ch := make(chan *[]byte, 1024)
 
-	workersCount := 32
 	for range workersCount {
 		go func() {
 			for p := range ch {
@@ -169,8 +172,6 @@ func (c *Client) listenUDP() {
 	}
 	ch := make(chan *[]byte, 1024)
 
-
-	workersCount := 32
 	for range workersCount {
 		go func() {
 			for data := range ch {
@@ -216,6 +217,16 @@ func (c *Client) listenUDP() {
 }
 
 func main() {
+	f, err := os.Create("pprof/cpu.out")
+	if err != nil {
+		log.Fatalf("error creating pprof out file: %v\n", err)
+	}
+
+	if err := pprof.StartCPUProfile(f); err != nil {
+		log.Fatalf("error starting CPU profile: %v\n", err)
+	}
+	defer pprof.StopCPUProfile()
+
 	var configPath string
 	flag.StringVar(&configPath, "config", "", "Path to config")
 	flag.Parse()
@@ -319,7 +330,7 @@ func main() {
 	}
 	defer conn.Close()
 
-	err = conn.SetWriteBuffer(5*1024*1024)
+	err = conn.SetWriteBuffer(5 * 1024 * 1024)
 	if err != nil {
 		log.Printf("error SetWriteBuffer(): %v\n", err)
 	}
