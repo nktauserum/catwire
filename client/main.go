@@ -64,7 +64,7 @@ func (c *Client) Handshake(remoteAddr string) error {
 		},
 		Payload: c.clientPublicKey.Bytes(),
 	}
-	encHandshake := common.EncodePacket(p)
+	encHandshake := common.EncodePacket(p, nil)
 
 	for range 5 {
 		_, err = c.conn.WriteToUDP(encHandshake, addr)

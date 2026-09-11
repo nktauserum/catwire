@@ -49,8 +49,12 @@ func DecodePacket(data []byte) (Packet, error) {
 	}, nil
 }
 
-func EncodePacket(p Packet) []byte {
-	buf := make([]byte, HeaderSize+len(p.Payload))
+func EncodePacket(p Packet, buf []byte) []byte {
+	if buf == nil { 
+		buf = make([]byte, HeaderSize+len(p.Payload))
+	} else { 
+		buf = buf[:HeaderSize+len(p.Payload)]
+	}
 
 	buf[0] = p.Header.PacketType
 	binary.BigEndian.PutUint64(buf[1:9], p.Header.PeerIndex)

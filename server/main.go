@@ -158,7 +158,7 @@ func (server *Server) listenUDP() {
 						Payload: server.serverPublicKey.Bytes(),
 					}
 
-					enc := common.EncodePacket(resp)
+					enc := common.EncodePacket(resp, nil)
 
 					s.Send(enc) // вызываем внутреннюю функцию Session для отправки байтов сразу в UDP
 				}

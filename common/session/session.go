@@ -112,9 +112,12 @@ func (s *Session) Outgoing(data []byte) {
 		Payload: encrypted,
 	}
 
-	encoded := common.EncodePacket(p)
+	buf2 := s.pool.Get().(*[]byte)
+	*buf2 = (*buf2)[:0]
+	encoded := common.EncodePacket(p, *buf2)
 	s.Send(encoded) // directly to UDP
 	s.pool.Put(buf)
+	s.pool.Put(buf2)
 }
 
 func (s *Session) RemoteAddr() string {
