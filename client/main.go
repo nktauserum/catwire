@@ -319,6 +319,11 @@ func main() {
 	}
 	defer conn.Close()
 
+	err = conn.SetWriteBuffer(5*1024*1024)
+	if err != nil {
+		log.Printf("error SetWriteBuffer(): %v\n", err)
+	}
+
 	log.Println("Listening on :8245")
 
 	incoming := make(chan common.Packet, 1024)
