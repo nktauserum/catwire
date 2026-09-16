@@ -50,9 +50,9 @@ func DecodePacket(data []byte) (Packet, error) {
 }
 
 func EncodePacket(p Packet, buf []byte) []byte {
-	if buf == nil { 
+	if buf == nil {
 		buf = make([]byte, HeaderSize+len(p.Payload))
-	} else { 
+	} else {
 		buf = buf[:HeaderSize+len(p.Payload)]
 	}
 

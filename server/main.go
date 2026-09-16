@@ -36,6 +36,13 @@ type Server struct {
 	tun  *water.Interface
 }
 
+var pool sync.Pool = sync.Pool{
+	New: func() any {
+		b := make([]byte, 65535)
+		return &b
+	},
+}
+
 type Task struct {
 	Data       *[]byte
 	ClientAddr *net.UDPAddr
@@ -76,17 +83,9 @@ func (server *Server) outgoingCallback(data []byte, clientAddr *net.UDPAddr) {
 }
 
 func (server *Server) listenUDP() {
-	buf := make([]byte, 65535)
-	pool := sync.Pool{
-		New: func() any {
-			b := make([]byte, 65535)
-			return &b
-		},
-	}
 	ch := make(chan *Task, 1024)
 
 	workersCount := 32
-
 	for range workersCount {
 		go func() {
 			for t := range ch {
@@ -169,15 +168,15 @@ func (server *Server) listenUDP() {
 	}
 
 	for {
-		n, clientAddr, err := server.conn.ReadFromUDP(buf)
+		data := pool.Get().(*[]byte)
+		*data = (*data)[:65535]
+
+		n, clientAddr, err := server.conn.ReadFromUDP(*data)
 		if err != nil {
 			log.Println("read: ", err)
 			continue
 		}
-
-		data := pool.Get().(*[]byte)
 		*data = (*data)[:n]
-		copy(*data, buf[:n])
 
 		ch <- &Task{Data: data, ClientAddr: clientAddr}
 	}
@@ -185,12 +184,6 @@ func (server *Server) listenUDP() {
 
 func (server *Server) listenTUN(tun *water.Interface) {
 	buf := make([]byte, 65535)
-	pool := sync.Pool{
-		New: func() any {
-			b := make([]byte, 65535)
-			return &b
-		},
-	}
 	ch := make(chan *[]byte, 1024)
 
 	workersCount := 32
@@ -211,15 +204,15 @@ func (server *Server) listenTUN(tun *water.Interface) {
 	}
 
 	for {
+		data := pool.Get().(*[]byte)
+		*data = (*data)[:65535]
+
 		n, err := tun.Read(buf)
 		if err != nil {
 			log.Println("write: ", err)
 			continue
 		}
-
-		data := pool.Get().(*[]byte)
 		*data = (*data)[:n]
-		copy(*data, buf[:n])
 
 		ch <- data
 	}
