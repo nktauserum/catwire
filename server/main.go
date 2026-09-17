@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"math/bits"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -56,13 +57,20 @@ func (t *EventTable) Release(index int) {
 func main() {
 	table := CreateEventTable()
 
-	for i := range 5 {
-		acquire := time.Now()
-		idx := table.Acquire()
-		fmt.Printf("Acquire #%v: got index %v on time %v\n", i, idx, time.Since(acquire))
+	var wg sync.WaitGroup
+	start := time.Now()
 
-		release := time.Now()
-		table.Release(idx)
-		fmt.Printf("Release #%v: time %v\n", i, time.Since(release))
+	for range 100 {
+		wg.Go(func(){
+			for range 1000 {
+				idx := table.Acquire()
+				time.Sleep(time.Microsecond)
+				table.Release(idx)
+			}
+		})
 	}
+
+	wg.Wait()
+	fmt.Printf("Total time: %v\n", time.Since(start))
+	fmt.Printf("Operations: 100k, avg: %v/op\n", time.Since(start) / 100000)
 }
