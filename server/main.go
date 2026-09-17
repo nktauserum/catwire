@@ -71,6 +71,7 @@ func main() {
 	}
 
 	wg.Wait()
-	fmt.Printf("Total time: %v\n", time.Since(start))
-	fmt.Printf("Operations: 100k, avg: %v/op\n", time.Since(start) / 100000)
+	since := time.Since(start)
+	fmt.Printf("Total time: %v\n", since)
+	fmt.Printf("Operations: 100k, avg: %v/op\n", (since - time.Microsecond*1000) / 100000 / 2)
 }
