@@ -11,7 +11,7 @@ func TestMultishot(t *testing.T) {
 		t.Fatalf("Error creating new ring: %v\n", err.Error())
 	}
 
-	_, err = createInternalPool(ring.ringFd)
+	pool, err := createInternalPool(ring.ringFd)
 	if err != nil {
 		t.Fatalf("Error creating new pool: %v\n", err.Error())
 	}
@@ -31,8 +31,10 @@ func TestMultishot(t *testing.T) {
 		t.Fatalf("Error copying file: %v\n", err.Error())
 	}
 
-	err = ring.submitMultishot(pool, int32(f.Fd()))
+	ret, err := ring.submitMultishot(pool, int32(f.Fd()))
 	if err != nil {
 		t.Fatalf("Error multishot: %v\n", err.Error())
 	}
+
+	t.Logf("Return: %v\n", ret)
 }

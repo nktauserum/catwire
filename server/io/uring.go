@@ -202,23 +202,23 @@ func (r *Ring) readFromCQ() (CQE, bool) {
 	return cqe, true
 }
 
-// func (r *Ring) submitMultishot(pool *internalPool, sockfd int32) error {
-// 	tail := atomic.LoadUint32(r.sq.ktail)
-// 	index := tail & atomic.LoadUint32(r.sq.kringMask)
-//
-// 	sqe := &r.sq.sqes[index]
-// 	sqe.opcode = IORING_OP_RECVMSG
-// 	sqe.flags = IOSQE_MULTISHOT | IOSQE_FIXED_FILE | IOSQE_BUFFER_SELECT
-// 	sqe.fd = sockfd
-// 	sqe.addr = 0
-// 	sqe.bufidx = uint16(pool.ringidx & 0xFFFF)
-// 	sqe.userData = 1
-//
-// 	r.sq.array[index] = index
-// 	tail += 1
-//
-// 	atomic.StoreUint32(r.sq.ktail, tail)
-//
-// 	_, err := enter(r.ringFd, 1, 0, 0)
-// 	return err
-// }
+func (r *Ring) submitMultishot(pool *internalPool, sockfd int32) (int, error) {
+	tail := atomic.LoadUint32(r.sq.ktail)
+	index := tail & atomic.LoadUint32(r.sq.kringMask)
+
+	sqe := &r.sq.sqes[index]
+	sqe.opcode = IORING_OP_RECVMSG
+	sqe.flags = IOSQE_MULTISHOT | IOSQE_BUFFER_SELECT
+	sqe.fd = sockfd
+	sqe.addr = 0
+	sqe.bufidx = 0
+	sqe.userData = 1
+
+	r.sq.array[index] = index
+	tail += 1
+
+	atomic.StoreUint32(r.sq.ktail, tail)
+
+	ret, err := enter(r.ringFd, 1, 0, 0)
+	return ret, err
+}
