@@ -17,6 +17,13 @@ package io
 //     return -1;
 // #endif
 // }
+// int get_register_num(void) {
+// #if defined(__NR_io_uring_register)
+// 		return __NR_io_uring_register;
+// #else
+// 		return -1;
+// #endif
+// }
 import "C"
 import (
 	"sync/atomic"
@@ -49,14 +56,15 @@ const (
 	defaultEntries = 256
 )
 
-var ioUringSetupSys, ioUringEnterSys = func() (int, int) {
+var ioUringSetupSys, ioUringEnterSys, ioUringRegisterSys = func() (int, int, int) {
 	ioSetupSys := C.get_setup_num()
 	ioEnterSys := C.get_enter_num()
-	if ioSetupSys == -1 || ioEnterSys == -1 {
+	ioRegisterSys := C.get_register_num()
+	if ioSetupSys == -1 || ioEnterSys == -1 || ioRegisterSys == -1 {
 		panic("io_uring is not supported")
 	}
 
-	return int(ioSetupSys), int(ioEnterSys)
+	return int(ioSetupSys), int(ioEnterSys), int(ioRegisterSys)
 }()
 
 func unmap(sq *sQueue, cq *cQueue) {
@@ -190,4 +198,25 @@ func (r *Ring) readFromCQ() (CQE, bool) {
 
 	cqe := r.cq.cqes[head&atomic.LoadUint32(r.cq.kringMask)]
 	return cqe, true
+}
+
+func (r *Ring) submitMultishot(pool *internalPool, sockfd int32) error {
+	tail := atomic.LoadUint32(r.sq.ktail)
+	index := tail & atomic.LoadUint32(r.sq.kringMask)
+
+	sqe := &r.sq.sqes[index]
+	sqe.opcode = IORING_OP_RECVMSG
+	sqe.flags = IOSQE_MULTISHOT | IOSQE_FIXED_FILE | IOSQE_BUFFER_SELECT
+	sqe.fd = sockfd
+	sqe.addr = 0
+	sqe.bufidx = uint16(pool.ringidx & 0xFFFF)
+	sqe.userData = 1
+
+	r.sq.array[index] = index
+	tail += 1
+
+	atomic.StoreUint32(r.sq.ktail, tail)
+
+	_, err := enter(r.ringFd, 1, 0, 0)
+	return err
 }
