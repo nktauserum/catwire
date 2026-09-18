@@ -9,7 +9,7 @@ import (
 
 const (
 	BUFFER_COUNT = 256
-	BUFFER_SIZE  = unsafe.Sizeof(Buffer{})
+	BUFFER_SIZE  = 65535 + 16
 )
 
 const (
@@ -21,48 +21,67 @@ const (
 	IORING_CQE_F_BUFFER       = 1 << 0
 )
 
-type Buffer struct {
-	data [65535 + 16]byte
-}
-
-type bufferRing struct {
-	tail uint32
-	_    uint32
-	buf  [BUFFER_COUNT]internalBuffer
-}
-
 type registerBuf struct {
-	ring   uint64
-	rindex uint32
-	resv   uint16
-	nrings uint16
+	addr    uint64
+	entries uint32
+	bgid    uint16
+	flags   uint16
+	resv    [3]uint64
 }
 
 type internalBuffer struct {
 	addr uint64
 	len  uint32
 	bid  uint16 // buffer ID
+	tail uint32
 }
 
 type internalPool struct {
-	data    [BUFFER_SIZE * BUFFER_COUNT]byte
-	ring    *bufferRing
-	headers [BUFFER_COUNT]syscall.Msghdr
-	addrs   [BUFFER_COUNT]syscall.RawSockaddrInet4
-
-	nextidx uint32
-	ringidx uint32
+	ring *internalBuffer
+	base unsafe.Pointer
 }
 
-func createInternalPool() *internalPool {
-	pool := new(internalPool)
-	pool.ring = new(bufferRing)
+func createInternalPool(ringFD int) (*internalPool, error) {
+	var pool internalPool
+
+	mapSize := (unsafe.Sizeof(internalBuffer{}) + BUFFER_SIZE) * BUFFER_COUNT
+	mapped, _, err := syscall.RawSyscall6(syscall.SYS_MMAP, 0, uintptr(mapSize),
+		syscall.PROT_READ|syscall.PROT_WRITE,
+		syscall.MAP_ANONYMOUS|syscall.MAP_PRIVATE,
+		0, 0,
+	)
+	if err != 0 {
+		return nil, fmt.Errorf("error mapping the buffer: %v", err)
+	}
+
+	pool.ring = (*internalBuffer)(unsafe.Pointer(mapped))
+	pool.ring.tail = 0
+
+	pool.base = unsafe.Add(unsafe.Pointer(mapped), unsafe.Sizeof(internalBuffer{})*BUFFER_COUNT)
+
+	reg := registerBuf{
+		addr:    uint64(uintptr(unsafe.Pointer(pool.ring))),
+		entries: BUFFER_COUNT,
+		bgid:    0,
+	}
+
+	_, _, errno := syscall.RawSyscall6(
+		uintptr(ioUringRegisterSys),
+		uintptr(ringFD),
+		uintptr(IORING_REGISTER_PBUF_RING),
+		uintptr(unsafe.Pointer(&reg)),
+		1, // nr_args
+		0, 0,
+	)
+	if errno != 0 {
+		return nil, fmt.Errorf("io_uring_register: %v", errno)
+	}
 
 	for i := range BUFFER_COUNT {
-		addr := unsafe.Add(unsafe.Pointer(&pool.data[0]), i*int(BUFFER_SIZE))
+		addr := unsafe.Add(pool.base, i*BUFFER_SIZE)
 		pos := atomic.LoadUint32((&pool.ring.tail)) % BUFFER_COUNT
 
-		entry := &pool.ring.buf[pos]
+		entry := (*internalBuffer)(unsafe.Add(unsafe.Pointer(pool.ring), uintptr(pos)*unsafe.Sizeof(internalBuffer{})))
 
 		entry.addr = uint64(uintptr(addr))
 		entry.len = uint32(BUFFER_SIZE)
@@ -71,26 +90,6 @@ func createInternalPool() *internalPool {
 		atomic.AddUint32(&pool.ring.tail, 1)
 	}
 
-	return pool
+	return &pool, nil
 }
 
-func (p *internalPool) register(ringFD int) error {
-	reg := registerBuf{
-		ring:   uint64(uintptr(unsafe.Pointer(p.ring))),
-		nrings: 1,
-	}
-
-	_, _, errno := syscall.RawSyscall(
-		uintptr(ioUringRegisterSys),
-		uintptr(ringFD),
-		uintptr(IORING_REGISTER_PBUF_RING),
-		uintptr(unsafe.Pointer(&reg)),
-	)
-	if errno != 0 {
-		return fmt.Errorf("io_uring_register: %v", errno)
-	}
-
-	p.ringidx = reg.rindex
-
-	return nil
-}

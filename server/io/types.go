@@ -6,18 +6,18 @@ import (
 
 type (
 	SQE struct {
-		opcode   uint8  /* type of operation for this sqe */
-		flags    uint8  /* IOSQE_ flags */
-		ioprio   uint16 /* ioprio for the request */
-		fd       int32  /* file descriptor to do IO on */
-		off      uint64 /* offset into file */
-		addr     uint64 /* pointer to buffer or iovecs */
-		len      uint32 /* buffer size or number of iovecs */
-		sqeFlags uint32
-		userData uint64 /* data to be passed back at completion time */
-		bufidx   uint16
-		personality uint16      /* personality to use, if used */
-		spliceIn    uint32      /* splice_fd_in / file_index / optlen union */
+		opcode      uint8  /* type of operation for this sqe */
+		flags       uint8  /* IOSQE_ flags */
+		ioprio      uint16 /* ioprio for the request */
+		fd          int32  /* file descriptor to do IO on */
+		off         uint64 /* offset into file */
+		addr        uint64 /* pointer to buffer or iovecs */
+		len         uint32 /* buffer size or number of iovecs */
+		sqeFlags    uint32
+		userData    uint64 /* data to be passed back at completion time */
+		bufidx      uint16
+		personality uint16 /* personality to use, if used */
+		spliceIn    uint32 /* splice_fd_in / file_index / optlen union */
 		_           [16]byte
 	}
 
