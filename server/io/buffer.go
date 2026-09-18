@@ -33,7 +33,7 @@ type internalBuffer struct {
 	addr uint64
 	len  uint32
 	bid  uint16 // buffer ID
-	tail uint32
+	tail uint32 // u32 because of atomic operations
 }
 
 type internalPool struct {
@@ -70,7 +70,7 @@ func createInternalPool(ringFD int) (*internalPool, error) {
 		uintptr(ringFD),
 		uintptr(IORING_REGISTER_PBUF_RING),
 		uintptr(unsafe.Pointer(&reg)),
-		1, // nr_args
+		1, // nr_args (!!)
 		0, 0,
 	)
 	if errno != 0 {
@@ -86,10 +86,9 @@ func createInternalPool(ringFD int) (*internalPool, error) {
 		entry.addr = uint64(uintptr(addr))
 		entry.len = uint32(BUFFER_SIZE)
 		entry.bid = uint16(i)
-
-		atomic.AddUint32(&pool.ring.tail, 1)
 	}
+
+	atomic.AddUint32(&pool.ring.tail, BUFFER_COUNT)
 
 	return &pool, nil
 }
-
