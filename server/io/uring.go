@@ -157,6 +157,7 @@ func NewRingDefault() (*Ring, error) {
 	return r, nil
 }
 
+// SQ - Submissions Queue
 func (r *Ring) submitToSQ(op uint8, fd int32, addr uintptr, len uint32, userData uint64) int {
 	tail := atomic.LoadUint32(r.sq.ktail)
 	index := tail & atomic.LoadUint32(r.sq.kringMask)
