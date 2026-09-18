@@ -26,6 +26,7 @@ package io
 // }
 import "C"
 import (
+	"fmt"
 	"sync/atomic"
 	"syscall"
 	"unsafe"
@@ -85,7 +86,7 @@ func NewRingDefault() (*Ring, error) {
 
 	r1, _, err := syscall.RawSyscall(uintptr(ioUringSetupSys), uintptr(defaultEntries), uintptr(unsafe.Pointer(&p)), 0)
 	if err != 0 {
-		return nil, err
+		return nil, fmt.Errorf("io_uring_setup: %v", err)
 	}
 
 	r.ringFd = int(r1)
@@ -100,7 +101,7 @@ func NewRingDefault() (*Ring, error) {
 		uintptr(r.ringFd),
 		uintptr(ioringOffSqRing))
 	if err != 0 {
-		return nil, err
+		return nil, fmt.Errorf("mmap on sqptr: %v", err)
 	}
 	r.sq.sqRingFd = unsafe.Pointer(sqPtr)
 
@@ -117,7 +118,7 @@ func NewRingDefault() (*Ring, error) {
 			uintptr(ioringOffCqRing))
 		if e != 0 {
 			unmap(&r.sq, &r.cq)
-			return nil, err
+			return nil, fmt.Errorf("mmap on cqptr: %v", err)
 		}
 		r.cq.cqRingFd = unsafe.Pointer(cqPtr)
 	}
@@ -145,7 +146,7 @@ func NewRingDefault() (*Ring, error) {
 		uintptr(ioringOffSqes))
 	if e != 0 {
 		unmap(&r.sq, &r.cq)
-		return nil, e
+		return nil, fmt.Errorf("mmap on sqes array: %v", e.Error())
 	}
 	sqeSlice := unsafe.Slice((*SQE)(unsafe.Pointer(sqes)), int(p.sqEntries))
 	sq.sqes = sqeSlice

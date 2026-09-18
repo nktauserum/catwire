@@ -16,7 +16,9 @@ type (
 		sqeFlags uint32
 		userData uint64 /* data to be passed back at completion time */
 		bufidx   uint16
-		_        [2]uint16
+		personality uint16      /* personality to use, if used */
+		spliceIn    uint32      /* splice_fd_in / file_index / optlen union */
+		_           [16]byte
 	}
 
 	sQueue struct {
