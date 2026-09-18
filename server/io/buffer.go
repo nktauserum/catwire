@@ -54,7 +54,7 @@ type internalPool struct {
 	ringidx uint32
 }
 
-func createInternalPool() (*internalPool, error) {
+func createInternalPool() *internalPool {
 	pool := new(internalPool)
 	pool.ring = new(bufferRing)
 
@@ -71,7 +71,7 @@ func createInternalPool() (*internalPool, error) {
 		atomic.AddUint32(&pool.ring.tail, 1)
 	}
 
-	return pool, nil
+	return pool
 }
 
 func (p *internalPool) register(ringFD int) error {
