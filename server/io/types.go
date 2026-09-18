@@ -15,9 +15,8 @@ type (
 		len      uint32 /* buffer size or number of iovecs */
 		sqeFlags uint32
 		userData uint64 /* data to be passed back at completion time */
-		_        uint16
 		bufidx   uint16
-		_        uint16
+		_        [2]uint16
 	}
 
 	sQueue struct {
