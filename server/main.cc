@@ -12,12 +12,10 @@
 
 
 class BufferRing {
-private:
+public:
     struct io_uring_buf_ring* buf_ring;
     void* base;
     size_t map_size;
-
-public:
     int count = 0;
     int size = 0;
 
@@ -160,15 +158,36 @@ public:
             io_uring_queue_exit(&ring.ring);
             return false;
         }
-           
+
         if (!ring.setup(&buffer_ring))
             return false;
+
+
+        struct io_uring_buf_reg reg = { 
+            .ring_addr = reinterpret_cast<unsigned long>(buffer_ring.buf_ring),
+            .ring_entries = static_cast<unsigned int>(buffer_ring.count),
+            .bgid = 0
+        };
+
+        int ret = io_uring_register_buf_ring(&ring.ring, &reg, 0);
+        if (ret) {
+            fprintf(stderr, "buf_ring init failed: %s\n"
+                    "NB This requires a kernel version >= 6.0\n",
+                    strerror(-ret));
+            return ret;
+        }
+
+        for (int i = 0; i < buffer_ring.count; i++) {
+            io_uring_buf_ring_add(buffer_ring.buf_ring, buffer_ring.extract(i), buffer_ring.size, i,
+                          io_uring_buf_ring_mask(buffer_ring.count), i);
+        }
+        io_uring_buf_ring_advance(buffer_ring.buf_ring, buffer_ring.count);
 
         memset(&msg, 0, sizeof(msg));
         msg.msg_namelen = sizeof(struct sockaddr_storage);
         msg.msg_controllen = 0;
 
-        int ret = io_uring_register_files(&ring.ring, &fd, 1);
+        ret = io_uring_register_files(&ring.ring, &fd, 1);
         if (ret) {
             fprintf(stderr, "register files: %s\n", strerror(-ret));
             return false;
@@ -191,7 +210,9 @@ public:
             int count = io_uring_peek_batch_cqe(&ring.ring, &cqes[0], BUF_COUNT*2);
             for (int i = 0; i < count; i++) {
                 struct io_uring_cqe *cqe = cqes[i];
-                if (cqes[i]->user_data > BUF_COUNT) {                
+                int idx = cqe->flags >> 16;
+
+                if (cqe->user_data > BUF_COUNT) {                
                     if (!(cqe->flags & IORING_CQE_F_MORE)) {
                         bool ok = add_recv();
                         if (!ok) continue;
@@ -200,8 +221,6 @@ public:
                         fprintf(stderr, "ENOBUFS\n");
                         continue;
                     }
-
-                    int idx = cqe->flags >> 16;
 
                     fprintf(stderr, "%p %d\n", buffer_ring.extract(idx), cqe->res);
 
@@ -232,7 +251,7 @@ public:
                         out->namelen, name, (int)ntohs(addr->sin_port));
                 }
               
-                buffer_ring.recycle(i);
+                buffer_ring.recycle(idx);
             }
         
             io_uring_cq_advance(&ring.ring, count);
