@@ -2,7 +2,6 @@ package io
 
 import (
 	"fmt"
-	"sync/atomic"
 	"syscall"
 	"unsafe"
 )
@@ -14,10 +13,9 @@ const (
 
 const (
 	IORING_REGISTER_PBUF_RING = 22
-	IORING_OP_RECVMSG         = 13
 	IOSQE_FIXED_FILE          = 1 << 0
 	IOSQE_BUFFER_SELECT       = 1 << 4
-	IOSQE_MULTISHOT           = 1 << 3
+	IORING_RECV_MULTISHOT     = 1 << 1
 	IORING_CQE_F_BUFFER       = 1 << 0
 )
 
@@ -33,7 +31,7 @@ type internalBuffer struct {
 	addr uint64
 	len  uint32
 	bid  uint16 // buffer ID
-	tail uint32 // u32 because of atomic operations
+	tail uint16
 }
 
 type internalPool struct {
@@ -79,16 +77,15 @@ func CreateInternalPool(ringFD int) (*internalPool, error) {
 
 	for i := range BUFFER_COUNT {
 		addr := unsafe.Add(pool.base, i*BUFFER_SIZE)
-		pos := atomic.LoadUint32((&pool.ring.tail)) % BUFFER_COUNT
 
-		entry := (*internalBuffer)(unsafe.Add(unsafe.Pointer(pool.ring), uintptr(pos)*unsafe.Sizeof(internalBuffer{})))
+		entry := (*internalBuffer)(unsafe.Add(unsafe.Pointer(pool.ring), uintptr(i)*unsafe.Sizeof(internalBuffer{})))
 
 		entry.addr = uint64(uintptr(addr))
 		entry.len = uint32(BUFFER_SIZE)
 		entry.bid = uint16(i)
 	}
 
-	atomic.AddUint32(&pool.ring.tail, BUFFER_COUNT)
+	pool.ring.tail = BUFFER_COUNT
 
 	return &pool, nil
 }

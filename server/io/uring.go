@@ -27,6 +27,7 @@ package io
 import "C"
 import (
 	"fmt"
+	"log"
 	"sync/atomic"
 	"syscall"
 	"unsafe"
@@ -46,7 +47,6 @@ const (
 	ioringOffSqes        = uint64(0x10000000)
 	ioringFeatSingleMmap = uint32(0x1)
 	ioringEnterGetEvents = uint64(1) << 0
-	MSG_TRUNC            = 0x0020
 )
 
 const (
@@ -208,13 +208,17 @@ func (r *Ring) SubmitMultishot(pool *internalPool, sockfd int32) (int, syscall.E
 	index := tail & atomic.LoadUint32(r.sq.kringMask)
 
 	sqe := &r.sq.sqes[index]
-	sqe.opcode = IORING_OP_RECVMSG
-	sqe.ioprio = IOSQE_MULTISHOT
-	sqe.flags = IOSQE_BUFFER_SELECT | IOSQE_FIXED_FILE | MSG_TRUNC // the last one is questionable
+	*sqe = SQE{}
+	sqe.opcode = IORING_OP_RECV
+	sqe.ioprio = IORING_RECV_MULTISHOT
+	sqe.flags = IOSQE_BUFFER_SELECT
+	// sqe.sqeFlags = MSG_TRUNC
 	sqe.fd = sockfd
 	sqe.addr = 0
 	sqe.bufidx = 0
 	sqe.userData = 1
+
+	log.Printf("%#v\n", *sqe)
 
 	r.sq.array[index] = index
 	tail += 1
