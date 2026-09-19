@@ -8,7 +8,7 @@ import (
 
 const (
 	BUFFER_COUNT = 256
-	BUFFER_SIZE  = 65535 + 16
+	BUFFER_SIZE  = 65535 + 16 + 1024
 )
 
 const (
@@ -35,8 +35,10 @@ type internalBuffer struct {
 }
 
 type internalPool struct {
-	ring *internalBuffer
-	base unsafe.Pointer
+	ring   *internalBuffer
+	base   unsafe.Pointer
+	msghdr syscall.Msghdr
+	bgid   uint16
 }
 
 func CreateInternalPool(ringFD int) (*internalPool, error) {
@@ -73,6 +75,11 @@ func CreateInternalPool(ringFD int) (*internalPool, error) {
 	)
 	if errno != 0 {
 		return nil, fmt.Errorf("io_uring_register: %v", errno)
+	}
+
+	pool.bgid = reg.bgid
+	pool.msghdr = syscall.Msghdr{
+		Namelen: uint32(unsafe.Sizeof(syscall.RawSockaddrAny{})),
 	}
 
 	for i := range BUFFER_COUNT {

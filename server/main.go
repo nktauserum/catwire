@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net"
+	"syscall"
 
 	"github.com/nktauserum/catwire/server/io"
 )
@@ -18,22 +19,25 @@ func main() {
 		log.Fatalf("Error creating new pool: %v\n", err.Error())
 	}
 
-	addr, err := net.ResolveUDPAddr("udp4", "127.0.0.1:45230")
+	fd, err := syscall.Socket(syscall.AF_INET, syscall.SOCK_DGRAM, 0)
 	if err != nil {
-		log.Fatalf("Error resolving udp addr: %v\n", err.Error())
+		log.Fatalf("Error creating socket: %v\n", err.Error())
 	}
 
-	conn, err := net.ListenUDP("udp4", addr)
-	if err != nil {
-		log.Fatalf("Error listening udp: %v\n", err.Error())
+	if err := syscall.SetsockoptInt(fd, syscall.SOL_SOCKET, syscall.SO_REUSEADDR, 1); err != nil {
+		log.Fatalf("Cannot set SO_REUSEADDR on socket, %s", err)
 	}
 
-	f, err := conn.File()
-	if err != nil {
-		log.Fatalf("Error copying file: %v\n", err.Error())
+	udpAddr, err := net.ResolveUDPAddr("udp", ":43250")
+	if err != nil && udpAddr.IP != nil {
+		log.Fatalf("Cannot resolve addr, %s", err)
 	}
 
-	_, errno := ring.SubmitMultishot(pool, int32(f.Fd()))
+	if err := syscall.Bind(fd, &syscall.SockaddrInet4{Port: udpAddr.Port}); err != nil {
+		log.Fatalf("Cannot bind socket, %s", err)
+	}
+
+	_, errno := ring.SubmitMultishot(pool, int32(fd))
 	if errno != 0 {
 		log.Fatalf("Error multishot: %v\n", errno.Error())
 	}
