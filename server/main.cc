@@ -134,6 +134,21 @@ public:
         return true;
     }
 
+    bool add_recv() {
+        struct io_uring_sqe *sqe;
+        if (ring.get_sqe(&sqe))
+            return false;
+
+        io_uring_prep_recvmsg_multishot(sqe, 0, &msg, MSG_TRUNC);
+
+        sqe->flags |= IOSQE_FIXED_FILE;
+        sqe->flags |= IOSQE_BUFFER_SELECT;
+        sqe->buf_group = 0;
+        io_uring_sqe_set_data64(sqe, buffer_ring.count + 1);
+
+        return true;
+    }
+
     bool setup() {
         if (!open())
             return false;
@@ -147,17 +162,11 @@ public:
         if (!ring.setup(&buffer_ring))
             return false;
 
-        struct io_uring_sqe *sqe;
-        if (ring.get_sqe(&sqe))
-            return false;
+        memset(&msg, 0, sizeof(msg));
+        msg.msg_namelen = sizeof(struct sockaddr_storage);
+        msg.msg_controllen = 0;
 
-        io_uring_prep_recvmsg_multishot(sqe, 0, &msg, MSG_TRUNC);
-
-        sqe->flags |= IOSQE_FIXED_FILE;
-        sqe->flags |= IOSQE_BUFFER_SELECT;
-        sqe->buf_group = 0;
-        io_uring_sqe_set_data64(sqe, buffer_ring.count + 1);
-        return true;
+        return add_recv();
     }
 
     void listen() {
@@ -176,6 +185,10 @@ public:
                 struct io_uring_cqe *cqe = cqes[i];
 
                 if (cqes[i]->user_data > BUF_COUNT) {                
+                    if (!(cqe->flags & IORING_CQE_F_MORE)) {
+                        bool ok = add_recv();
+                        if (!ok) continue;
+                    }
                     if (cqe->res == -ENOBUFS)
                         continue;
 
