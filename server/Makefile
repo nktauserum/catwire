@@ -1,5 +1,6 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -pedantic  
+CFLAGS = -Wall -Wextra -pedantic 
+LIBS = -luring
 SRC = main.c 
 OBJ = $(SRC:.c=.o)
 TARGET = srv 
@@ -7,7 +8,7 @@ TARGET = srv
 all: $(TARGET)
 
 $(TARGET): $(OBJ)
-	$(CC) -o $@ $^
+	$(CC) -o $@ $^ $(LIBS)
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
