@@ -23,7 +23,7 @@ public:
 
     bool setup() {
         map_size = (sizeof(struct io_uring_buf) + size) * count;
-        void* mapped = mmap(NULL, size, PROT_READ | PROT_WRITE,
+        void* mapped = mmap(NULL, map_size, PROT_READ | PROT_WRITE,
                   MAP_ANONYMOUS | MAP_PRIVATE, 0, 0);
         if (mapped == MAP_FAILED) {
             fprintf(stderr, "buf_ring mmap: %s\n", strerror(errno));
@@ -31,6 +31,8 @@ public:
         }
         buf_ring = (struct io_uring_buf_ring *)mapped;
         io_uring_buf_ring_init(buf_ring);
+
+        base = (unsigned char*)mapped + count * sizeof(struct io_uring_buf);
         
         return true; 
     }
@@ -46,7 +48,7 @@ public:
 
     BufferRing(int buffer_count, int buffer_size) : count{buffer_count}, size{buffer_size} {}
     ~BufferRing() {
-        munmap(base, map_size);
+        munmap((void*)buf_ring, map_size);
     }
 };
 
@@ -69,8 +71,8 @@ public:
         return false;
     }
 
-    bool setup(BufferRing* buffer_ring) {
-        this->buffer_ring = buffer_ring;
+    bool setup(BufferRing* br) {
+        this->buffer_ring = std::move(br);
         unsigned int buffer_count = buffer_ring->count;
 
         struct io_uring_params params;
@@ -166,6 +168,12 @@ public:
         msg.msg_namelen = sizeof(struct sockaddr_storage);
         msg.msg_controllen = 0;
 
+        int ret = io_uring_register_files(&ring.ring, &fd, 1);
+        if (ret) {
+            fprintf(stderr, "register files: %s\n", strerror(-ret));
+            return false;
+        }
+
         return add_recv();
     }
 
@@ -183,16 +191,19 @@ public:
             int count = io_uring_peek_batch_cqe(&ring.ring, &cqes[0], BUF_COUNT*2);
             for (int i = 0; i < count; i++) {
                 struct io_uring_cqe *cqe = cqes[i];
-
                 if (cqes[i]->user_data > BUF_COUNT) {                
                     if (!(cqe->flags & IORING_CQE_F_MORE)) {
                         bool ok = add_recv();
                         if (!ok) continue;
                     }
-                    if (cqe->res == -ENOBUFS)
+                    if (cqe->res == -ENOBUFS) {                      
+                        fprintf(stderr, "ENOBUFS\n");
                         continue;
+                    }
 
                     int idx = cqe->flags >> 16;
+
+                    fprintf(stderr, "%p %d\n", buffer_ring.extract(idx), cqe->res);
 
                     struct io_uring_recvmsg_out *out = io_uring_recvmsg_validate(buffer_ring.extract(idx), cqe->res, &msg);
                     if (!out) {
