@@ -31,9 +31,9 @@ func TestMultishot(t *testing.T) {
 		t.Fatalf("Error copying file: %v\n", err.Error())
 	}
 
-	ret, err := ring.submitMultishot(pool, int32(f.Fd()))
-	if err != nil {
-		t.Fatalf("Error multishot: %v\n", err.Error())
+	ret, errno := ring.submitMultishot(pool, int32(f.Fd()))
+	if errno != 0 {
+		t.Fatalf("Error multishot: %v\n", errno.Error())
 	}
 
 	t.Logf("Return: %v\n", ret)
