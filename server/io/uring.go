@@ -46,7 +46,7 @@ const (
 	ioringOffSqes        = uint64(0x10000000)
 	ioringFeatSingleMmap = uint32(0x1)
 	ioringEnterGetEvents = uint64(1) << 0
-	MSG_TRUNC = 0x0020
+	MSG_TRUNC            = 0x0020
 )
 
 const (
@@ -203,13 +203,13 @@ func (r *Ring) readFromCQ() (CQE, bool) {
 	return cqe, true
 }
 
-func (r *Ring) submitMultishot(pool *internalPool, sockfd int32) (int, syscall.Errno) {
+func (r *Ring) SubmitMultishot(pool *internalPool, sockfd int32) (int, syscall.Errno) {
 	tail := atomic.LoadUint32(r.sq.ktail)
 	index := tail & atomic.LoadUint32(r.sq.kringMask)
 
 	sqe := &r.sq.sqes[index]
 	sqe.opcode = IORING_OP_RECVMSG
-	sqe.ioprio |= IOSQE_MULTISHOT
+	sqe.ioprio = IOSQE_MULTISHOT
 	sqe.flags = IOSQE_BUFFER_SELECT | IOSQE_FIXED_FILE | MSG_TRUNC // the last one is questionable
 	sqe.fd = sockfd
 	sqe.addr = 0
@@ -223,4 +223,17 @@ func (r *Ring) submitMultishot(pool *internalPool, sockfd int32) (int, syscall.E
 
 	ret, err := enter(r.ringFd, 1, 0, 0)
 	return ret, err
+}
+
+func (r *Ring) Fd() int {
+	return r.ringFd
+}
+
+func (r *Ring) WaitForCQ() syscall.Errno {
+	_, err := enter(r.ringFd, 0, 1, uint32(ioringEnterGetEvents))
+	return err
+}
+
+func (r *Ring) ReadFromCQ() (CQE, bool) {
+	return r.readFromCQ()
 }

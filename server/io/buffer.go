@@ -41,7 +41,7 @@ type internalPool struct {
 	base unsafe.Pointer
 }
 
-func createInternalPool(ringFD int) (*internalPool, error) {
+func CreateInternalPool(ringFD int) (*internalPool, error) {
 	var pool internalPool
 
 	mapSize := (unsafe.Sizeof(internalBuffer{}) + BUFFER_SIZE) * BUFFER_COUNT
