@@ -31,8 +31,6 @@ import (
 	"sync/atomic"
 	"syscall"
 	"unsafe"
-
-	"golang.org/x/sys/unix"
 )
 
 type Ring struct {
@@ -210,14 +208,11 @@ func (r *Ring) SubmitMultishot(pool *internalPool, sockfd int32) (int, syscall.E
 	index := tail & atomic.LoadUint32(r.sq.kringMask)
 
 	sqe := &r.sq.sqes[index]
-	*sqe = SQE{}
 	sqe.opcode = IORING_OP_RECVMSG
 	sqe.ioprio = IORING_RECV_MULTISHOT
-	sqe.flags = IOSQE_BUFFER_SELECT
+	sqe.flags = IOSQE_BUFFER_SELECT | IOSQE_FIXED_FILE | IOSQE_
 	sqe.fd = sockfd
-	sqe.addr = uint64(uintptr(unsafe.Pointer(&unix.Msghdr{
-		Namelen: uint32(unsafe.Sizeof(syscall.RawSockaddrAny{})),
-	})))
+	sqe.addr = uint64(uintptr(unsafe.Pointer(&pool.msghdr)))
 	sqe.bufidx = pool.bgid
 	sqe.userData = 1
 	sqe.len = 1
