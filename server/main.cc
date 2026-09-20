@@ -100,7 +100,8 @@ public:
         struct sockaddr_in addr = {
             .sin_family = AF_INET,
             .sin_port = htons(UDP_PORT),
-            .sin_addr = { INADDR_ANY }
+            .sin_addr = { INADDR_ANY },
+            .sin_zero = {0}
         };
 
         int ret = bind(fd, (struct sockaddr *) &addr, sizeof(addr));
@@ -165,7 +166,9 @@ public:
         struct io_uring_buf_reg reg = { 
             .ring_addr = reinterpret_cast<unsigned long>(buf_ring),
             .ring_entries = BUF_COUNT,
-            .bgid = 0
+            .bgid = 0,
+            .flags = 0,
+            .resv = {0}
         };
 
         ret = io_uring_register_buf_ring(&ring, &reg, 0);
