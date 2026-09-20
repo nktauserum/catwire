@@ -3,6 +3,8 @@
 #include <atomic>
 #include "types.h"
 
+#define QUEUE_SIZE 64
+
 #ifdef TESTING
 #include <stdio.h>
 #endif
@@ -29,3 +31,53 @@ public:
     }
 };
 
+template <typename T>
+struct Queue {
+private:
+    T data[QUEUE_SIZE]; // size must be a power of two
+    alignas(64) u32 head = 0;
+    alignas(64) u32 tail_cache = 0;
+    alignas(64) u32 tail = 0;
+
+public:
+    inline T* acquire() {
+        if (head - tail_cache == QUEUE_SIZE) {
+            tail_cache = reinterpret_cast<std::atomic<u32>*>(&tail)->load(std::memory_order_consume);
+            if (__builtin_expect(head - tail_cache == QUEUE_SIZE, 0))
+                return nullptr;
+        }
+        return &data[head % QUEUE_SIZE];
+    }
+
+    inline void push() {
+        reinterpret_cast<std::atomic<u32>*>(&head)->store(head+1, std::memory_order_release);
+    }
+
+    inline T* read() {
+         if (tail == reinterpret_cast<std::atomic<u32>*>(&head)->load(std::memory_order_acquire)) return nullptr;
+         return &data[tail % QUEUE_SIZE];
+    }
+
+    inline void pop() {
+        reinterpret_cast<std::atomic<u32>*>(&tail)->store(tail+1, std::memory_order_release);
+    }
+};
+
+template <typename T, int workers_count>
+class Channel {
+private:
+    Queue<T> workers[workers_count];
+    alignas(64) u32 next = 0;
+
+public:
+        void push(T item) {
+        int idx = (reinterpret_cast<std::atomic<u32>*>(&next)->fetch_add(1, std::memory_order_relaxed) - 1) % workers_count;
+        Queue<T>& worker = workers[idx];
+
+        T* buf = nullptr;
+        while (!(buf = worker.acquire())) {
+            *buf = item;
+            worker.push();
+        }
+    }
+};
