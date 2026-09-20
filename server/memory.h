@@ -1,16 +1,11 @@
 #pragma once
-#ifndef ALLOC_H
-#define ALLOC_H
 
 #include <atomic>
-
 #include "types.h"
 
 #ifdef TESTING
 #include <stdio.h>
 #endif
-
-#define DEFAULT_EP_SIZE 64
 
 template <typename T>
 class EventPool {
@@ -34,4 +29,3 @@ public:
     }
 };
 
-#endif // ALLOC_H

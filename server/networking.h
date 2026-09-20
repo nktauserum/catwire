@@ -1,3 +1,5 @@
+#pragma once
+
 #include <stdio.h>
 #include <string.h>
 #include <netinet/udp.h>
@@ -5,8 +7,6 @@
 #include <unistd.h>
 
 #include <sys/mman.h>
-#include <liburing.h>
-
 #include <liburing.h>
 
 #define BUF_COUNT 256
