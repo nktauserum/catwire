@@ -24,9 +24,8 @@ public:
 
     EventPool() : bitmap{static_cast<u64>(~0)} {
 #ifdef TESTING
-        puts("Bitmap: ");
-        for (int offset = 0; offset < pool->count; ++offset) {
-            char bit = pool->bitmap[offset/CHAR_BIT] & (1 << offset%CHAR_BIT) ? '1' : '0';
+        for (int offset = 0; offset < 64; ++offset) {
+            char bit = bitmap & (1 << offset) ? '1' : '0';
             putc(bit, stdout);
         }
         putc('\n', stdout);
