@@ -2,7 +2,7 @@ CC = gcc
 CFLAGS = -Wall -Wextra -pedantic 
 LIBS = -luring -lstdc++
 SRC = main.cc 
-OBJ = $(SRC:.c=.o)
+OBJ = $(SRC:.cc=.o)
 TARGET = srv 
 
 all: $(TARGET)
