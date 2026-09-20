@@ -1,9 +1,9 @@
 #include <string.h>
 #include <stdio.h>
 
+#include "types.h"
 #include "memory.h"
 #include "networking.h"
-#include "types.h"
 
 #define WORKERS_COUNT 8
 

@@ -1,6 +1,8 @@
 #pragma once
 
 #include <atomic>
+#include <thread>
+
 #include "types.h"
 
 #define QUEUE_SIZE 64
@@ -17,8 +19,24 @@ private:
 public:
     T data[64];
 
-    int Acquire();
-    void Release(int idx);
+    int Acquire() {
+        for (;;) {
+            u64 b = bitmap.load();
+            if (b != 0) {
+                int offset = __builtin_ctzll(b);
+                if (bitmap.compare_exchange_strong(b, b^(1ull<<offset))) return offset;
+
+                continue;
+            }
+            
+            std::this_thread::yield();
+        }
+    }
+
+    void Release(int idx) { 
+        if (idx >= 64 || idx < 0) return;
+        bitmap.fetch_or(1ull << idx);
+    }
 
     SharedPool() : bitmap{static_cast<u64>(~0)} {
 #ifdef TESTING
@@ -29,6 +47,7 @@ public:
         putc('\n', stdout);
 #endif
     }
+
 };
 
 template <typename T>
@@ -74,10 +93,11 @@ public:
         int idx = (reinterpret_cast<std::atomic<u32>*>(&next)->fetch_add(1, std::memory_order_relaxed) - 1) % workers_count;
         Queue<T>& worker = workers[idx];
 
-        T* buf = nullptr;
+        T* buf;
         while (!(buf = worker.acquire())) {
-            *buf = item;
-            worker.push();
+            std::this_thread::yield();
         }
+        *buf = item;
+        worker.push();
     }
 };
