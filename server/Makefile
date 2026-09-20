@@ -3,7 +3,7 @@ CXXFLAGS = -std=c++23 -Wall -Wextra -pedantic
 LIBS = -luring -lstdc++
 
 BUILD_DIR = build
-SRC = main.cc memory.cc
+SRC = main.cc memory.cc networking.cc
 OBJ = $(addprefix $(BUILD_DIR)/, $(SRC:.cc=.o))
 TARGET = $(BUILD_DIR)/srv
 
