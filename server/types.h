@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>
+#include <netinet/in.h>
 
 typedef uint8_t u8;
 typedef int8_t i8;
@@ -11,13 +12,24 @@ typedef int32_t i32;
 typedef uint64_t u64;
 typedef int64_t i64;
 
+typedef struct sockaddr_in Address;
+
 typedef struct {
-    u8  PacketType;
-    u64 PeerIndex;
-    u64 Counter;
+    u8  packetType;
+    u64 peerIndex;
+    u64 counter;
 } __attribute__((packed)) Header;
 
 typedef struct {
-    Header  Header;
-    u8      Payload[65535];
+    Header  header;
+    u8      payload[65535];
 } __attribute__((packed)) Packet;
+
+typedef struct {
+    u64     idx;
+    u32     buffer_idx;
+    Address incoming_addr;
+    Packet  packet;
+} IncomingBuffer; 
+
+
