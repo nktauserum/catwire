@@ -7,7 +7,7 @@ typedef struct {
 } testValue;
 
 int main(void) {
-    auto pool = EventPool<testValue>();
+    auto pool = SharedPool<testValue>();
     for (int i = 0; i < 63; i++) {
         printf("idx: %d\n", pool.Acquire());
     }
