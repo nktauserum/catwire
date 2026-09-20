@@ -20,7 +20,11 @@ typedef struct {
     size_t size;
 } UDPPacket;
 
-typedef void (*IncomingHandler)(UDPPacket);
+class Handler {
+public:
+    virtual ~Handler() = default;
+    virtual void handle(UDPPacket) = 0; // now just for incoming
+};
 
 typedef struct {
     u8  packetType;
@@ -37,6 +41,6 @@ typedef struct {
     u64     idx;
     Address incoming_addr;
     Packet  packet;
-} IncomingBuffer; 
+} IncomingBuffer;
 
 

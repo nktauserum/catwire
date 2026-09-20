@@ -9,29 +9,36 @@
 
 static u64 incoming_counter = 0;
 
-static inline void incomingHandler(Channel<u32, WORKERS_COUNT>& channel, SharedPool<IncomingBuffer>* pool, UDPPacket packet) {
-    int idx = pool->Acquire();
-    IncomingBuffer* buffer = &pool->data[idx];
+class IncomingHandler : public Handler {
+public: 
+    Channel<u32, WORKERS_COUNT> channel;
+    SharedPool<IncomingBuffer> pool;
 
-    memcpy(&buffer->packet, packet.payload, packet.size); // but if the incoming packet was greater than 65535+17?
-    buffer->incoming_addr = packet.addr;
-    buffer->idx = incoming_counter++;
+    inline void handle(UDPPacket packet) override {
+        int idx = pool.Acquire();
+        IncomingBuffer* buffer = &pool.data[idx];
 
-    channel.push(idx);
+        memcpy(&buffer->packet, packet.payload, packet.size); // but if the incoming packet was greater than 65535+17?
+        buffer->incoming_addr = packet.addr;
+        buffer->idx = incoming_counter++;
 
-    printf("Incoming packet: payload %lu bytes, idx %lu, buf idx %d\n", packet.size, incoming_counter - 1, idx);
-    fflush(stdout);
-}
+        channel.push(idx);
+
+        printf("Incoming packet: payload %lu bytes, idx %lu, buf idx %d\n", packet.size, incoming_counter - 1, idx);
+        fflush(stdout);
+    }
+
+    IncomingHandler() : channel{Channel<u32, WORKERS_COUNT>()}, pool{SharedPool<IncomingBuffer>()} {};
+};
 
 int main(void) {
-    auto incomingPool = SharedPool<IncomingBuffer>();
-    auto incomingCh = Channel<u32, WORKERS_COUNT>();
-
-    UDP udp_listener = UDP(); 
+    UDP udp_listener; 
     bool ok = udp_listener.Setup();
     if (!ok) 
         return 1;
 
+    IncomingHandler handler;
+    udp_listener.Listen(&handler);
 
     return 0;
 }

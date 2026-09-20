@@ -100,7 +100,7 @@ bool UDP::Setup() {
     return add_recv();
 }
 
-void UDP::Listen(IncomingHandler handler) {
+void UDP::Listen(Handler* handler) {
     struct io_uring_cqe *cqes[BUF_COUNT*2];
     while (true) {
         int ret = io_uring_submit_and_wait(&ring, 1);
@@ -154,7 +154,7 @@ void UDP::Listen(IncomingHandler handler) {
                     io_uring_recvmsg_payload_length(out, cqe->res, &msg),
                     out->namelen, name, (int)ntohs(addr->sin_port));
 
-                handler(UDPPacket { 
+                handler->handle(UDPPacket { 
                     .addr       = *addr, // maybe provide a pointer? we copy addr twice now
                     .payload    = reinterpret_cast<const char*>(io_uring_recvmsg_payload(out, &msg)),
                     .size       = io_uring_recvmsg_payload_length(out, cqe->res, &msg)

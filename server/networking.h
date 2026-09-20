@@ -65,7 +65,7 @@ private:
 public:
     int Open();
     bool Setup();
-    void Listen(IncomingHandler handler);
+    void Listen(Handler* handler);
 
     ~UDP() {
         close(fd);
