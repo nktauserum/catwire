@@ -1,17 +1,17 @@
-CC = g++
-CFLAGS = -Wall -Wextra -pedantic 
+CXX = g++
+CXXFLAGS = -std=c++23 -Wall -Wextra -pedantic
 LIBS = -luring -lstdc++
-SRC = main.cc 
+SRC = main.cc memory.cc 
 OBJ = $(SRC:.cc=.o)
 TARGET = srv 
 
 all: $(TARGET)
 
 $(TARGET): $(OBJ)
-	$(CC) -o $@ $^ $(LIBS)
+	$(CXX) -o $@ $^ $(LIBS)
 
-%.o: %.c
-	$(CC) $(CFLAGS) -c $< -o $@
+%.o: %.cc
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 run: all
 	./$(TARGET)
@@ -19,4 +19,4 @@ run: all
 clean:
 	rm -f $(OBJ) $(TARGET)
 
-.PHONY: all clean
+.PHONY: all clean run
