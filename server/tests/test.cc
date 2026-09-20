@@ -8,7 +8,11 @@ typedef struct {
 
 int main(void) {
     auto pool = EventPool<testValue>();
-    for (int i = 0; i < 64; i++) {
+    for (int i = 0; i < 63; i++) {
         printf("idx: %d\n", pool.Acquire());
     }
+
+    pool.Release(0);
+    printf("idx: %d\n", pool.Acquire());
+
 }

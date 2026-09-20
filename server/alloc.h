@@ -38,7 +38,8 @@ public:
     }
 
     void Release(int idx) {
-        
+       if (idx >= 64 || idx < 0) return;
+       bitmap.fetch_or(1ull << idx);
     }
 
     EventPool() : bitmap{static_cast<u64>(~0)} {
