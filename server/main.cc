@@ -1,4 +1,5 @@
 #include <string.h>
+#include <stdio.h>
 
 #include "memory.h"
 #include "networking.h"
@@ -17,6 +18,9 @@ static inline void incomingHandler(Channel<u32, WORKERS_COUNT>& channel, SharedP
     buffer->idx = incoming_counter++;
 
     channel.push(idx);
+
+    printf("Incoming packet: payload %lu bytes, idx %lu, buf idx %d\n", packet.size, incoming_counter - 1, idx);
+    fflush(stdout);
 }
 
 int main(void) {
@@ -28,7 +32,6 @@ int main(void) {
     if (!ok) 
         return 1;
 
-    
 
     return 0;
 }
