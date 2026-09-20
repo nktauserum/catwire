@@ -1,22 +1,27 @@
 CXX = g++
 CXXFLAGS = -std=c++23 -Wall -Wextra -pedantic
 LIBS = -luring -lstdc++
-SRC = main.cc memory.cc 
-OBJ = $(SRC:.cc=.o)
-TARGET = srv 
+
+BUILD_DIR = build
+SRC = main.cc memory.cc
+OBJ = $(addprefix $(BUILD_DIR)/, $(SRC:.cc=.o))
+TARGET = $(BUILD_DIR)/srv
 
 all: $(TARGET)
 
-$(TARGET): $(OBJ)
+$(BUILD_DIR):
+	mkdir -p $@
+
+$(TARGET): $(OBJ) | $(BUILD_DIR)
 	$(CXX) -o $@ $^ $(LIBS)
 
-%.o: %.cc
+$(BUILD_DIR)/%.o: %.cc | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 run: all
 	./$(TARGET)
 
 clean:
-	rm -f $(OBJ) $(TARGET)
+	rm -rf $(BUILD_DIR)
 
 .PHONY: all clean run

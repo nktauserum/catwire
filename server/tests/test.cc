@@ -1,6 +1,6 @@
 #define TESTING
 
-#include "../alloc.h"
+#include "../memory.h"
 
 typedef struct {
     int data[64];
