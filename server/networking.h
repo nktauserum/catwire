@@ -9,6 +9,8 @@
 #include <sys/mman.h>
 #include <liburing.h>
 
+#include "types.h"
+
 #define BUF_COUNT 256
 #define BUF_SIZE 65535+16
 #define UDP_PORT 45230
@@ -63,7 +65,7 @@ private:
 public:
     int Open();
     bool Setup();
-    void Listen();
+    void Listen(IncomingHandler handler);
 
     ~UDP() {
         close(fd);

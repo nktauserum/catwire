@@ -15,6 +15,14 @@ typedef int64_t i64;
 typedef struct sockaddr_in Address;
 
 typedef struct {
+    Address addr;
+    const char* payload;
+    size_t size;
+} UDPPacket;
+
+typedef void (*IncomingHandler)(UDPPacket);
+
+typedef struct {
     u8  packetType;
     u64 peerIndex;
     u64 counter;
@@ -27,7 +35,6 @@ typedef struct {
 
 typedef struct {
     u64     idx;
-    u32     buffer_idx;
     Address incoming_addr;
     Packet  packet;
 } IncomingBuffer; 
