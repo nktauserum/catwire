@@ -90,6 +90,13 @@ public:
             return -1;
         }
 
+        int opt = 1;
+        if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
+            perror("setsockopt failed");
+            close(fd);
+            return 1;
+        }
+
         struct sockaddr_in addr = {
             .sin_family = AF_INET,
             .sin_port = htons(UDP_PORT),
@@ -123,8 +130,9 @@ public:
 
     bool setup() {
         fd = open();
-        if (fd != 0) 
+        if (fd < 0) 
             return false;
+        
 
         // init io_uring
         struct io_uring_params params;
