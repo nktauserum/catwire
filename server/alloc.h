@@ -1,3 +1,7 @@
+#pragma once
+#ifndef ALLOC_H
+#define ALLOC_H
+
 #include "types.h"
 
 #ifdef TESTING
@@ -32,3 +36,5 @@ public:
 #endif
     }
 };
+
+#endif // ALLOC_H
