@@ -24,22 +24,16 @@ public:
     T data[64];
 
     int Acquire() {
-        auto backoff = std::chrono::nanoseconds(1);
-        
         for (;;) {
             u64 b = bitmap.load();
             if (b != 0) {
                 int offset = __builtin_ctzll(b);
                 if (bitmap.compare_exchange_strong(b, b^(1ull<<offset))) return offset;
 
-                backoff = std::chrono::nanoseconds(1);
                 continue;
             }
             
-            std::this_thread::sleep_for(backoff);
-            if (backoff < std::chrono::milliseconds(1)) {
-                backoff *= 2;
-            }
+            std::this_thread::yield();
         }
     }
 

@@ -1,4 +1,4 @@
-CC = gcc
+CC = g++
 CFLAGS = -Wall -Wextra -pedantic 
 LIBS = -luring -lstdc++
 SRC = main.cc 
