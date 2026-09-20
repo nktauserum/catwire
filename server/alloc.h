@@ -2,6 +2,11 @@
 #ifndef ALLOC_H
 #define ALLOC_H
 
+#include <atomic>
+#include <chrono>
+#include <bit>
+#include <thread>
+
 #include "types.h"
 
 #ifdef TESTING
@@ -13,13 +18,29 @@
 template <typename T>
 class EventPool {
 private:
-    u64 bitmap;
+    std::atomic<u64> bitmap;
 
 public:
     T data[64];
 
     int Acquire() {
-        return -1;
+        auto backoff = std::chrono::nanoseconds(1);
+        
+        for (;;) {
+            u64 b = bitmap.load();
+            if (b != 0) {
+                int offset = __builtin_ctz(b);
+                if (bitmap.compare_exchange_strong(b, b^(1<<offset))) return offset;
+
+                backoff = std::chrono::nanoseconds(1);
+                continue;
+            }
+            
+            std::this_thread::sleep_for(backoff);
+            if (backoff < std::chrono::milliseconds(1)) {
+                backoff *= 2;
+            }
+        }
     }
 
     void Release(int idx) {
