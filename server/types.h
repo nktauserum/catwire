@@ -46,4 +46,8 @@ typedef struct {
     Packet  packet;
 } IncomingBuffer;
 
+enum PacketTypes : u8 {
+   DATA,
+   HANDSHAKE,
+};
 

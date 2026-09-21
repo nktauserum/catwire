@@ -1,6 +1,6 @@
 CXX = g++
 CXXFLAGS = -std=c++23 -Wall -Wextra -pedantic
-LIBS = -luring -lstdc++
+LIBS = -luring -lsodium -lstdc++
 
 BUILD_DIR = build
 SRC = main.cc networking.cc

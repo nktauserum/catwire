@@ -1,9 +1,11 @@
 #include <string.h>
 #include <stdio.h>
 #include <thread>
+#include <stdexcept>
 
 #define BOOST_BEAST_HEADER_ONLY
 #include <boost/beast/core/detail/base64.hpp>
+#include <sodium.h>
 
 #include "types.h"
 #include "memory.h"
@@ -11,24 +13,38 @@
 
 #define WORKERS_COUNT 8
 
-static u64 incoming_counter = 0;
-
 class Application : public Handler {
 private:
-    char privateKeyBytes[32];
+    u8 publicKey[crypto_kx_PUBLICKEYBYTES];
+    u8 privateKey[crypto_kx_SECRETKEYBYTES];
 
     Channel<u32, WORKERS_COUNT> channel;
     SharedPool<IncomingBuffer> pool;
+
+    u64 incoming_counter = 0;
 public: 
     inline void worker() {
         auto queue = channel.add_worker();
 
         while (true) {
             u32 idx = *queue->read();
-
-            // do some work
-
             queue->pop();
+
+            IncomingBuffer* buf = &pool.data[idx];
+
+            switch (buf->packet.header.packetType) {
+            case DATA:
+                break;
+
+            case HANDSHAKE:
+                 
+                break;
+
+            default:
+                goto def;            
+            }
+
+def:
             pool.Release(idx);
         }
     }
@@ -48,7 +64,18 @@ public:
     }
 
     Application(const char* key) : channel{Channel<u32, WORKERS_COUNT>()}, pool{SharedPool<IncomingBuffer>()} {
+        if (sodium_init() < 0) 
+            throw std::runtime_error("panic: failed to initialize libsodium");
+
+        if (!crypto_aead_aes256gcm_is_available()) 
+            throw std::runtime_error("panic: AES256-GCM is not supported by your hardware (CPU)");
+
+        char privateKeyBytes[32];
         size_t n = boost::beast::detail::base64::decode(&privateKeyBytes, key, strlen(key)).first;
+
+        if (crypto_kx_keypair(publicKey, privateKey) != 0) {
+            throw std::runtime_error("panic: check provided private key again");
+        }
     };
 };
 
