@@ -2,6 +2,9 @@
 #include <stdio.h>
 #include <thread>
 
+#define BOOST_BEAST_HEADER_ONLY
+#include <boost/beast/core/detail/base64.hpp>
+
 #include "types.h"
 #include "memory.h"
 #include "networking.h"
@@ -11,10 +14,12 @@
 static u64 incoming_counter = 0;
 
 class Application : public Handler {
-public: 
+private:
+    char privateKeyBytes[32];
+
     Channel<u32, WORKERS_COUNT> channel;
     SharedPool<IncomingBuffer> pool;
-
+public: 
     inline void worker() {
         auto queue = channel.add_worker();
 
@@ -42,7 +47,9 @@ public:
         fflush(stdout);
     }
 
-    Application() : channel{Channel<u32, WORKERS_COUNT>()}, pool{SharedPool<IncomingBuffer>()} {};
+    Application(const char* key) : channel{Channel<u32, WORKERS_COUNT>()}, pool{SharedPool<IncomingBuffer>()} {
+        size_t n = boost::beast::detail::base64::decode(&privateKeyBytes, key, strlen(key)).first;
+    };
 };
 
 int main(void) {
@@ -51,7 +58,7 @@ int main(void) {
     if (!ok) 
         return 1;
 
-    Application app;
+    Application app{"zb1NPTbALjQmO/aWqF2YUnRJC1igyulIsk6zQK5nhEE="};
 
     std::thread workers[WORKERS_COUNT];
     for (int i = 0; i < WORKERS_COUNT; ++i) {
