@@ -21,7 +21,7 @@ public:
         while (true) {
             u32* ptr = queue->read();
             if (!ptr) {
-                queue->waiting.store(0, std::memory_order_relaxed);
+                queue->waiting.store(1, std::memory_order_relaxed);
                 if (!queue->read())
                     queue->futex.wait(&queue->waiting, 1);
                 continue;
