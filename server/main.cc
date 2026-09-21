@@ -1,5 +1,6 @@
 #include <string.h>
 #include <stdio.h>
+#include <thread>
 
 #include "types.h"
 #include "memory.h"
@@ -13,6 +14,10 @@ class IncomingHandler : public Handler {
 public: 
     Channel<u32, WORKERS_COUNT> channel;
     SharedPool<IncomingBuffer> pool;
+
+    inline void worker() {
+        
+    }
 
     inline void handleIncoming(UDPPacket packet) override {
         int idx = pool.Acquire();
@@ -38,7 +43,11 @@ int main(void) {
         return 1;
 
     IncomingHandler handler;
-    udp_listener.Listen(&handler);
+    std::thread incoming([&handler, &udp_listener](){
+        udp_listener.Listen(&handler);
+    });
+    
+    incoming.join();
 
     return 0;
 }
