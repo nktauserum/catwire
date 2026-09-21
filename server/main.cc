@@ -19,12 +19,7 @@ public:
         auto queue = channel.add_worker();
 
         while (true) {
-            u32* ptr = queue->read();
-            if (!ptr) {
-                std::this_thread::yield();
-                continue;
-            }
-            u32 idx = *ptr;
+            u32 idx = *(queue->read());
 
             printf("Worker got buffer %d\n", idx);
             fflush(stdout);

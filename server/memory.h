@@ -1,9 +1,11 @@
 #pragma once
 
 #include <atomic>
+#include <linux/futex.h>
 #include <thread>
 
 #include "types.h"
+#include "futex.h"
 
 #define QUEUE_SIZE 64
 
@@ -53,18 +55,26 @@ public:
 template <typename T>
 struct Queue {
 private:
-    T data[QUEUE_SIZE]; // size must be a power of two
     alignas(64) u32 head = 0;
     alignas(64) u32 tail_cache = 0;
     alignas(64) u32 tail = 0;
+   
+    Futex futex;
+    std::atomic<u32> waiting;
+    T data[QUEUE_SIZE]; // size must be a power of two
+
 
 public:
     inline T* acquire() {
-        if (head - tail_cache == QUEUE_SIZE) {
+        do {
             tail_cache = reinterpret_cast<std::atomic<u32>*>(&tail)->load(std::memory_order_consume);
-            if (__builtin_expect(head - tail_cache == QUEUE_SIZE, 0))
+            if (__builtin_expect(head - tail_cache == QUEUE_SIZE, 0)) {
+                futex.wake();
+                waiting.store(0, std::memory_order_relaxed);    
                 return nullptr;
-        }
+            }
+        } while (head - tail_cache == QUEUE_SIZE);
+
         return &data[head % QUEUE_SIZE];
     }
 
@@ -73,8 +83,12 @@ public:
     }
 
     inline T* read() {
-         if (tail == reinterpret_cast<std::atomic<u32>*>(&head)->load(std::memory_order_acquire)) return nullptr;
-         return &data[tail % QUEUE_SIZE];
+        do {
+            waiting.store(1, std::memory_order_relaxed);
+            futex.wait(1);    
+        } while (tail == reinterpret_cast<std::atomic<u32>*>(&head)->load(std::memory_order_acquire));
+
+        return &data[tail % QUEUE_SIZE];
     }
 
     inline void pop() {
