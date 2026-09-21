@@ -131,7 +131,6 @@ void UDP::Listen(Handler* handler) {
                 }
 
                 if (out->flags & MSG_TRUNC) {
-                    unsigned int r = io_uring_recvmsg_payload_length(out, cqe->res, &msg);
                     recycle(idx);
                     continue;
                 }
