@@ -13,18 +13,16 @@
 
 struct Futex {
 private:
-    std::atomic<u32> val = 0;
-
-    inline int futex(int futex_op, u32 val, const struct timespec *timeout, u32 *uaddr2, u32 val3) {
-        return syscall(SYS_futex, (u32*)&val, futex_op, val, timeout, uaddr2, val3);
+    inline int futex(std::atomic<u32>* lock, int futex_op, u32 val, const struct timespec *timeout, u32 *uaddr2, u32 val3) {
+        return syscall(SYS_futex, lock, futex_op, val, timeout, uaddr2, val3);
     }
 
 public:
-    inline int wait(u32 expect_val) {
-      return futex(FUTEX_WAIT_PRIVATE, expect_val, NULL, NULL, 0);
+    inline int wait(std::atomic<u32>* lock, u32 expect_val) {
+      return futex(lock, FUTEX_WAIT_PRIVATE, expect_val, NULL, NULL, 0);
     }
 
-    inline int wake() {
-      return futex(FUTEX_WAKE_PRIVATE, 1, NULL, NULL, 0);
+    inline int wake(std::atomic<u32>* lock) {
+      return futex(lock, FUTEX_WAKE_PRIVATE, 1, NULL, NULL, 0);
     }
 };
