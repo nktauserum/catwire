@@ -154,7 +154,7 @@ void UDP::Listen(Handler* handler) {
                     io_uring_recvmsg_payload_length(out, cqe->res, &msg),
                     out->namelen, name, (int)ntohs(addr->sin_port));
 
-                handler->handle(UDPPacket { 
+                handler->handleIncoming(UDPPacket { 
                     .addr       = *addr, // maybe provide a pointer? we copy addr twice now
                     .payload    = reinterpret_cast<const char*>(io_uring_recvmsg_payload(out, &msg)),
                     .size       = io_uring_recvmsg_payload_length(out, cqe->res, &msg)

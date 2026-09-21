@@ -14,7 +14,7 @@ public:
     Channel<u32, WORKERS_COUNT> channel;
     SharedPool<IncomingBuffer> pool;
 
-    inline void handle(UDPPacket packet) override {
+    inline void handleIncoming(UDPPacket packet) override {
         int idx = pool.Acquire();
         IncomingBuffer* buffer = &pool.data[idx];
 

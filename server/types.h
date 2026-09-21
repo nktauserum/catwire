@@ -23,7 +23,7 @@ typedef struct {
 class Handler {
 public:
     virtual ~Handler() = default;
-    virtual void handle(UDPPacket) = 0; // now just for incoming
+    virtual void handleIncoming(UDPPacket) = 0; // now just for incoming
 };
 
 typedef struct {
