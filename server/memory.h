@@ -64,7 +64,6 @@ private:
     Futex futex;
 
 public:
-
     inline T* acquire() {
         if (head - tail_cache == QUEUE_SIZE) {
             tail_cache = reinterpret_cast<std::atomic<u32>*>(&tail)->load(std::memory_order_consume);

@@ -10,7 +10,7 @@
 
 static u64 incoming_counter = 0;
 
-class IncomingHandler : public Handler {
+class Application : public Handler {
 public: 
     Channel<u32, WORKERS_COUNT> channel;
     SharedPool<IncomingBuffer> pool;
@@ -42,7 +42,7 @@ public:
         fflush(stdout);
     }
 
-    IncomingHandler() : channel{Channel<u32, WORKERS_COUNT>()}, pool{SharedPool<IncomingBuffer>()} {};
+    Application() : channel{Channel<u32, WORKERS_COUNT>()}, pool{SharedPool<IncomingBuffer>()} {};
 };
 
 int main(void) {
@@ -51,17 +51,17 @@ int main(void) {
     if (!ok) 
         return 1;
 
-    IncomingHandler handler;
+    Application app;
 
     std::thread workers[WORKERS_COUNT];
     for (int i = 0; i < WORKERS_COUNT; ++i) {
-        workers[i] = std::thread([&handler](){
-            handler.worker();
+        workers[i] = std::thread([&app](){
+            app.worker();
         });
     }
 
-    std::thread incoming([&handler, &udp_listener](){
-        udp_listener.Listen(&handler);
+    std::thread incoming([&app, &udp_listener](){
+        udp_listener.Listen(&app);
     });
 
 
