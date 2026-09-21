@@ -16,7 +16,22 @@ public:
     SharedPool<IncomingBuffer> pool;
 
     inline void worker() {
-        
+        auto queue = channel.add_worker();
+
+        while (true) {
+            u32* ptr = queue->read();
+            if (!ptr) {
+                std::this_thread::yield();
+                continue;
+            }
+            u32 idx = *ptr;
+
+            printf("Worker got buffer %d\n", idx);
+            fflush(stdout);
+            
+            queue->pop();
+            pool.Release(idx);
+        }
     }
 
     inline void handleIncoming(UDPPacket packet) override {
@@ -43,10 +58,19 @@ int main(void) {
         return 1;
 
     IncomingHandler handler;
+
+    std::thread workers[WORKERS_COUNT];
+    for (int i = 0; i < WORKERS_COUNT; ++i) {
+        workers[i] = std::thread([&handler](){
+            handler.worker();
+        });
+    }
+
     std::thread incoming([&handler, &udp_listener](){
         udp_listener.Listen(&handler);
     });
-    
+
+
     incoming.join();
 
     return 0;
