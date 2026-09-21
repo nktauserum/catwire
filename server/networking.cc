@@ -122,37 +122,31 @@ void UDP::Listen(Handler* handler) {
                     if (!ok) continue;
                 }
                 if (cqe->res == -ENOBUFS) {                      
-                    fprintf(stderr, "ENOBUFS\n");
                     continue;
                 }
 
-                fprintf(stderr, "%p %d\n", BUF_OFFSET(base, idx), cqe->res);
-
                 struct io_uring_recvmsg_out *out = io_uring_recvmsg_validate(BUF_OFFSET(base, idx), cqe->res, &msg);
                 if (!out) {
-                    fprintf(stderr, "bad recvmsg\n");
                     continue;
                 }
 
                 if (out->flags & MSG_TRUNC) {
                     unsigned int r = io_uring_recvmsg_payload_length(out, cqe->res, &msg);
-                    fprintf(stderr, "truncated msg need %u received %u\n",
-                            out->payloadlen, r);
                     recycle(idx);
                     continue;
                 }
 
                 struct sockaddr_in *addr = reinterpret_cast<struct sockaddr_in*>(io_uring_recvmsg_name(out));
-                char buff[INET6_ADDRSTRLEN + 1];
-                void *paddr = &addr->sin_addr;
-
-                const char* name = inet_ntop(AF_INET, paddr, buff, sizeof(buff));
-                if (!name)
-                    name = "<INVALID>";
-
-                fprintf(stderr, "received %u bytes %d from [%s]:%d\n",
-                    io_uring_recvmsg_payload_length(out, cqe->res, &msg),
-                    out->namelen, name, (int)ntohs(addr->sin_port));
+                // char buff[INET6_ADDRSTRLEN + 1];
+                // void *paddr = &addr->sin_addr;
+                //
+                // const char* name = inet_ntop(AF_INET, paddr, buff, sizeof(buff));
+                // if (!name)
+                //     name = "<INVALID>";
+                //
+                // fprintf(stderr, "received %u bytes %d from [%s]:%d\n",
+                //     io_uring_recvmsg_payload_length(out, cqe->res, &msg),
+                //     out->namelen, name, (int)ntohs(addr->sin_port));
 
                 handler->handleIncoming(UDPPacket { 
                     .addr       = *addr, // maybe provide a pointer? we copy addr twice now
