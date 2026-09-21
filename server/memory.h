@@ -36,7 +36,7 @@ public:
     }
 
     void Release(int idx) { 
-        if (idx >= 64 || idx < 0) return;
+        if (unlikely(idx >= 64 || idx < 0)) return;
         bitmap.fetch_or(1ull << idx);
     }
 
@@ -68,7 +68,7 @@ public:
     inline T* acquire() {
         if (head - tail_cache == QUEUE_SIZE) {
             tail_cache = reinterpret_cast<std::atomic<u32>*>(&tail)->load(std::memory_order_consume);
-            if (__builtin_expect(head - tail_cache == QUEUE_SIZE, 0)) {
+            if (unlikely(head - tail_cache == QUEUE_SIZE)) {
                 return nullptr;
             }
         }

@@ -104,9 +104,9 @@ void UDP::Listen(Handler* handler) {
     struct io_uring_cqe *cqes[BUF_COUNT*2];
     while (true) {
         int ret = io_uring_submit_and_wait(&ring, 1);
-        if (ret == -EINTR)
+        if (unlikely(ret == -EINTR))
             continue;
-        if (ret < 0) {
+        if (unlikely(ret < 0)) {
             fprintf(stderr, "submit and wait failed %d\n", ret);
             break;
         }
@@ -116,21 +116,21 @@ void UDP::Listen(Handler* handler) {
             struct io_uring_cqe *cqe = cqes[i];
             int idx = cqe->flags >> 16;
 
-            if (cqe->user_data > BUF_COUNT) {                
-                if (!(cqe->flags & IORING_CQE_F_MORE)) {
+            if (likely(cqe->user_data > BUF_COUNT)) {                
+                if (unlikely(!(cqe->flags & IORING_CQE_F_MORE))) {
                     bool ok = add_recv();
                     if (!ok) continue;
                 }
-                if (cqe->res == -ENOBUFS) {                      
+                if (unlikely(cqe->res == -ENOBUFS)) {
                     continue;
                 }
 
                 struct io_uring_recvmsg_out *out = io_uring_recvmsg_validate(BUF_OFFSET(base, idx), cqe->res, &msg);
-                if (!out) {
+                if (unlikely(out == nullptr)) {
                     continue;
                 }
 
-                if (out->flags & MSG_TRUNC) {
+                if (unlikely(out->flags & MSG_TRUNC)) {
                     recycle(idx);
                     continue;
                 }

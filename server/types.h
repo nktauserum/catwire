@@ -3,6 +3,9 @@
 #include <stdint.h>
 #include <netinet/in.h>
 
+#define likely(x)    __builtin_expect(!!(x), 1)
+#define unlikely(x)  __builtin_expect(!!(x), 0)
+
 typedef uint8_t u8;
 typedef int8_t i8;
 typedef uint16_t u16;
