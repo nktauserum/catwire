@@ -60,10 +60,11 @@ private:
     alignas(64) u32 tail = 0;
    
     T data[QUEUE_SIZE]; // size must be a power of two
+                        
+public:
     std::atomic<u32> waiting;
     Futex futex;
 
-public:
     inline T* acquire() {
         if (head - tail_cache == QUEUE_SIZE) {
             tail_cache = reinterpret_cast<std::atomic<u32>*>(&tail)->load(std::memory_order_consume);
