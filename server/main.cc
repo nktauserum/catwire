@@ -19,15 +19,10 @@ public:
         auto queue = channel.add_worker();
 
         while (true) {
-            u32* ptr = queue->read();
-            if (!ptr) {
-                queue->waiting.store(1, std::memory_order_relaxed);
-                if (!queue->read())
-                    queue->futex.wait(&queue->waiting, 1);
-                continue;
-            }
-            u32 idx = *ptr;
-            
+            u32 idx = *queue->read();
+
+            // do some work
+
             queue->pop();
             pool.Release(idx);
         }
