@@ -122,3 +122,43 @@ public:
         }
     }
 };
+
+class ControlBlock {
+public:
+    std::atomic<uint64_t> ref;
+
+    ControlBlock() {
+       ref.store(1); 
+    }
+}; 
+
+
+template <typename T> 
+class shared_ptr {
+private:
+    ControlBlock *ctrl;
+    T *raw_pointer;
+
+public:
+    T& operator*() {
+        return *raw_pointer;
+    }
+
+    ~shared_ptr() {
+        if (ctrl->ref.fetch_add(-1) == 0) {
+            delete ctrl;
+            delete raw_pointer;
+        }
+    };
+
+    shared_ptr(shared_ptr const& b) {
+       this->ctrl = b.ctrl;
+       this->ctrl->ref.fetch_add(1, std::memory_order_relaxed);
+       raw_pointer = b.raw_pointer;
+    }
+
+    shared_ptr(T* ptr) {
+        ctrl = new ControlBlock;
+        raw_pointer = ptr;
+    }
+};

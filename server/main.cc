@@ -13,10 +13,23 @@
 
 #define WORKERS_COUNT 8
 
+class Session {
+private:
+    Address remote_addr;
+    u8 secret[crypto_scalarmult_BYTES];
+    u8 publicKey[crypto_kx_PUBLICKEYBYTES];
+
+public:
+    Session(u8* s, u8* pubkey) {
+        memcpy(&secret[0], s, crypto_kx_PUBLICKEYBYTES);
+        memcpy(&publicKey[0], pubkey, crypto_scalarmult_BYTES);
+    }
+};
+
 class Application : public Handler {
 private:
-    u8 publicKey[crypto_kx_PUBLICKEYBYTES];
-    u8 privateKey[crypto_kx_SECRETKEYBYTES];
+    u8 publicKey[crypto_kx_PUBLICKEYBYTES] = {0};
+    u8 privateKey[crypto_kx_SECRETKEYBYTES] = {0};
 
     Channel<u32, WORKERS_COUNT> channel;
     SharedPool<IncomingBuffer> pool;
@@ -36,15 +49,21 @@ public:
             case DATA:
                 break;
 
-            case HANDSHAKE:
-                 
-                break;
+            case HANDSHAKE: {
+                u8 secret[32] = {0};
+                if (crypto_scalarmult(secret, privateKey, buf->packet.payload) != 0) 
+                    goto cleanup;
 
-            default:
-                goto def;            
+                auto session = shared_ptr(new Session(secret, buf->packet.payload));
+                break;
             }
 
-def:
+            default:
+                goto cleanup;
+                break;
+            }
+
+cleanup:
             pool.Release(idx);
         }
     }
