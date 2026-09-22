@@ -67,6 +67,8 @@ public:
             .payload = {0},
         };
 
+        memcpy(&buf->packet.payload, publicKey, 32);
+
         socket.async_send_to(
             boost::asio::buffer(&buf->packet, buf->len+sizeof(Header)), 
             endpoint, 
