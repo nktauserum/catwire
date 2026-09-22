@@ -128,7 +128,7 @@ public:
         pool.Release(idx);
     }
 
-    Application(UDP* udp, const char* key) : channel{Channel<u32, WORKERS_COUNT>()}, pool{SharedPool<IncomingBuffer>()}, udp{udp} {
+    Application(UDP* udp, const char* key) : udp{udp}, channel{Channel<u32, WORKERS_COUNT>()}, pool{SharedPool<IncomingBuffer>()} {
         if (sodium_init() < 0) 
             throw std::runtime_error("panic: failed to initialize libsodium");
 
