@@ -186,10 +186,9 @@ bool UDP::Send(IncomingBuffer* b) {
         .msg_flags      = 0,
     };
 
-    io_uring_prep_sendmsg(sqe, fd, &msg, 0);
+    io_uring_prep_sendmsg(sqe, fd, &buf->msg, 0);
     io_uring_sqe_set_data64(sqe, b->idx);
 
-	sqe->flags |= IOSQE_FIXED_FILE;
-    
+    io_uring_submit(&ring); 
     return true;
 }

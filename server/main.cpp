@@ -84,6 +84,7 @@ public:
 
                 out_buf->idx    = out_idx;
                 out_buf->addr   = buf->addr;
+                out_buf->len    = crypto_kx_PUBLICKEYBYTES + sizeof(Header);
                 out_buf->packet = Packet {
                     .header  = Header {
                         .packetType = HANDSHAKE,
@@ -94,7 +95,10 @@ public:
                 };
                 memcpy(&out_buf->packet.payload, publicKey, crypto_kx_PUBLICKEYBYTES);
 
-                udp->Send(out_buf);
+                if (!udp->Send(out_buf)) {
+                    puts("UDP::Send() failed");
+                    goto cleanup;
+                }
 
                 break;
             }

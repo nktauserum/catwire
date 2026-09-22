@@ -48,14 +48,14 @@ private:
         }
         if (!*sqe) {
             fprintf(stderr, "cannot get sqe\n");
-            return true;
+            return false;
         }
-        return false;
+        return true;
     }
 
     bool add_recv() {
         struct io_uring_sqe *sqe;
-        if (get_sqe(&sqe))
+        if (!get_sqe(&sqe))
             return false;
 
         io_uring_prep_recvmsg_multishot(sqe, 0, &msg, MSG_TRUNC);

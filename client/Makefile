@@ -1,5 +1,5 @@
 CXX = g++
-CXXFLAGS = -std=c++23 -Wall -Wextra -pedantic
+CXXFLAGS = -std=c++23 -Wall -Wextra -pedantic -g
 LIBS = -lsodium -lstdc++
 
 BUILD_DIR = build
