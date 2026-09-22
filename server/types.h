@@ -19,14 +19,15 @@ typedef struct sockaddr_in Address;
 
 typedef struct {
     Address addr;
-    const char* payload;
+    char* payload;
     size_t size;
 } UDPPacket;
 
 class Handler {
 public:
     virtual ~Handler() = default;
-    virtual void handleIncoming(UDPPacket) = 0; // now just for incoming
+    virtual void incomingRecvCallback(UDPPacket) = 0;
+    virtual void incomingSendCallback(u32) = 0;
 };
 
 typedef struct {
@@ -42,7 +43,7 @@ typedef struct {
 
 typedef struct {
     u64     idx;
-    Address incoming_addr;
+    Address addr;
     Packet  packet;
 } IncomingBuffer;
 
@@ -50,4 +51,5 @@ enum PacketTypes : u8 {
    DATA,
    HANDSHAKE,
 };
+
 

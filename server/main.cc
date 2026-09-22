@@ -13,7 +13,7 @@
 
 #define WORKERS_COUNT 8
 
-class Session {
+struct Session {
 private:
     Address remote_addr;
     u8 secret[crypto_scalarmult_BYTES];
@@ -28,6 +28,8 @@ public:
 
 class Application : public Handler {
 private:
+    UDP* udp;
+
     u8 publicKey[crypto_kx_PUBLICKEYBYTES] = {0};
     u8 privateKey[crypto_kx_SECRETKEYBYTES] = {0};
 
@@ -54,6 +56,9 @@ public:
                 if (crypto_scalarmult(secret, privateKey, buf->packet.payload) != 0) 
                     goto cleanup;
 
+                printf("The shared secret was computed!\n");
+                fflush(stdout);
+
                 auto session = shared_ptr(new Session(secret, buf->packet.payload));
                 break;
             }
@@ -63,17 +68,17 @@ public:
                 break;
             }
 
-cleanup:
+    cleanup:
             pool.Release(idx);
         }
     }
 
-    inline void handleIncoming(UDPPacket packet) override {
+    inline void incomingRecvCallback(UDPPacket packet) override {
         int idx = pool.Acquire();
         IncomingBuffer* buffer = &pool.data[idx];
 
         memcpy(&buffer->packet, packet.payload, packet.size); // but if the incoming packet was greater than 65535+17?
-        buffer->incoming_addr = packet.addr;
+        buffer->addr = packet.addr;
         buffer->idx = incoming_counter++;
 
         channel.push(idx);
@@ -82,7 +87,11 @@ cleanup:
         fflush(stdout);
     }
 
-    Application(const char* key) : channel{Channel<u32, WORKERS_COUNT>()}, pool{SharedPool<IncomingBuffer>()} {
+    inline void incomingSendCallback(u32 idx) override {
+        pool.Release(idx);
+    }
+
+    Application(UDP* udp, const char* key) : channel{Channel<u32, WORKERS_COUNT>()}, pool{SharedPool<IncomingBuffer>()}, udp{udp} {
         if (sodium_init() < 0) 
             throw std::runtime_error("panic: failed to initialize libsodium");
 
@@ -104,7 +113,7 @@ int main(void) {
     if (!ok) 
         return 1;
 
-    Application app{"zb1NPTbALjQmO/aWqF2YUnRJC1igyulIsk6zQK5nhEE="};
+    Application app{&udp_listener, "zb1NPTbALjQmO/aWqF2YUnRJC1igyulIsk6zQK5nhEE="};
 
     std::thread workers[WORKERS_COUNT];
     for (int i = 0; i < WORKERS_COUNT; ++i) {

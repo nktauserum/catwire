@@ -16,6 +16,7 @@
 #define UDP_PORT 45230
 
 #define BUF_OFFSET(base, idx) (reinterpret_cast<unsigned char*>(base) + BUF_SIZE*idx)
+#define IDX_OFFSET(base, ptr) (reinterpret_cast<unsigned char*>(ptr) - reinterpret_cast<unsigned char*>(base)) / sizeof(struct io_uring_sqe) 
 
 class UDP {
 private:
@@ -26,6 +27,11 @@ private:
     struct io_uring_buf_ring* buf_ring;
     void* base;
     size_t map_size;
+
+    struct {
+        struct msghdr msg;
+        struct iovec vec;
+    } send[BUF_COUNT];
 
     void recycle(unsigned int idx) {
         io_uring_buf_ring_add(buf_ring, BUF_OFFSET(base, idx), BUF_SIZE, idx, io_uring_buf_ring_mask(BUF_COUNT), 0);
@@ -65,7 +71,8 @@ private:
 public:
     int Open();
     bool Setup();
-    void Listen(Handler* handler);
+    void Listen(Handler*);
+    bool Send(Address, void*, size_t, u64);
 
     ~UDP() {
         close(fd);

@@ -116,15 +116,16 @@ void UDP::Listen(Handler* handler) {
             struct io_uring_cqe *cqe = cqes[i];
             int idx = cqe->flags >> 16;
 
-            if (likely(cqe->user_data > BUF_COUNT)) {                
-                if (unlikely(!(cqe->flags & IORING_CQE_F_MORE))) {
-                    bool ok = add_recv();
-                    if (!ok) continue;
-                }
-                if (unlikely(cqe->res == -ENOBUFS)) {
-                    continue;
-                }
+            if (unlikely(!(cqe->flags & IORING_CQE_F_MORE))) {
+                bool ok = add_recv();
+                if (!ok) continue;
+            }
+            if (unlikely(cqe->res == -ENOBUFS)) {
+                continue;
+            }
 
+
+            if (cqe->user_data > BUF_COUNT) {
                 struct io_uring_recvmsg_out *out = io_uring_recvmsg_validate(BUF_OFFSET(base, idx), cqe->res, &msg);
                 if (unlikely(out == nullptr)) {
                     continue;
@@ -147,11 +148,13 @@ void UDP::Listen(Handler* handler) {
                 //     io_uring_recvmsg_payload_length(out, cqe->res, &msg),
                 //     out->namelen, name, (int)ntohs(addr->sin_port));
 
-                handler->handleIncoming(UDPPacket { 
+                handler->incomingRecvCallback(UDPPacket { 
                     .addr       = *addr, // maybe provide a pointer? we copy addr twice now
-                    .payload    = reinterpret_cast<const char*>(io_uring_recvmsg_payload(out, &msg)),
+                    .payload    = reinterpret_cast<char*>(io_uring_recvmsg_payload(out, &msg)),
                     .size       = io_uring_recvmsg_payload_length(out, cqe->res, &msg)
                 });
+            } else {
+                handler->incomingSendCallback(cqe->user_data);
             }
           
             recycle(idx);
@@ -159,4 +162,31 @@ void UDP::Listen(Handler* handler) {
     
         io_uring_cq_advance(&ring, count);
     }
+}
+
+bool UDP::Send(Address addr, void* payload, size_t size, u64 idx) {
+    struct io_uring_sqe* sqe;
+    if (!get_sqe(&sqe)) return false;
+
+    auto buf = &send[idx];
+    buf->vec = (struct iovec) {
+        .iov_base = payload,
+        .iov_len = size,
+    };
+
+    buf->msg = (struct msghdr) { 
+        .msg_name = &addr,
+        .msg_namelen = sizeof(Address),
+        .msg_iov = &buf->vec,
+        .msg_iovlen = 1,
+        .msg_control = nullptr,
+        .msg_controllen = 0,
+    };
+
+    io_uring_prep_sendmsg(sqe, fd, &msg, 0);
+    io_uring_sqe_set_data64(sqe, idx);
+
+	sqe->flags |= IOSQE_FIXED_FILE;
+    
+    return true;
 }
