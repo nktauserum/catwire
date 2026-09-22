@@ -171,16 +171,19 @@ bool UDP::Send(IncomingBuffer* b) {
     auto buf = &send[b->idx];
     buf->vec = (struct iovec) {
         .iov_base = reinterpret_cast<void*>(&b->packet),
-        .iov_len = b->len,
+        .iov_len  = b->len,
     };
 
     buf->msg = (struct msghdr) { 
-        .msg_name = &b->addr,
-        .msg_namelen = sizeof(Address),
-        .msg_iov = &buf->vec,
-        .msg_iovlen = 1,
-        .msg_control = nullptr,
+        .msg_name       = &b->addr,
+        .msg_namelen    = sizeof(Address),
+        .msg_iov        = &buf->vec,
+        .msg_iovlen     = 1,
+        .__pad1         = 0,
+        .msg_control    = nullptr,
         .msg_controllen = 0,
+        .__pad2         = 0,
+        .msg_flags      = 0,
     };
 
     io_uring_prep_sendmsg(sqe, fd, &msg, 0);
