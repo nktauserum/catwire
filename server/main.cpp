@@ -163,12 +163,12 @@ int main(void) {
         });
     }
 
-    std::thread incoming([&app, &udp_listener](){
+    // std::thread incoming([&app, &udp_listener](){
         udp_listener.Listen(&app);
-    });
+    // });
 
 
-    incoming.join();
+    // incoming.join();
 
     return 0;
 }
