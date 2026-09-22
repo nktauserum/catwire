@@ -9,21 +9,28 @@ using boost::asio::ip::udp;
 
 class Client {
 private:
+    boost::asio::io_context ctx;
+    std::thread run_ctx;
+    boost::asio::executor_work_guard<boost::asio::io_context::executor_type> guard;
+
     udp::socket   socket;
     udp::endpoint endpoint;
-
+    
     SharedPool<IncomingBuffer> pool;
 
     std::atomic<u64> peerIndex = 0;
     std::atomic<u64> counter   = 0;
     
 public:
-    boost::asio::io_context ctx;
 
-    Client(const char* server_addr, const char* server_port) : socket{udp::socket(ctx, udp::endpoint(udp::v4(), 0))} {
+    Client(const char* server_addr, const char* server_port) : ctx{}, guard{boost::asio::make_work_guard(ctx)}, socket{udp::socket(ctx, udp::endpoint(udp::v4(), 0))} {
         udp::resolver resolver(ctx);
         udp::resolver::results_type endpoints = resolver.resolve(udp::v4(), server_addr, server_port);
         endpoint = *endpoints.begin();
+
+        run_ctx = std::thread([this](){
+            ctx.run();
+        });
     }
 
     // TODO: add an eternal loop
@@ -52,21 +59,13 @@ public:
 };
 
 int main(void) {
-    try {
     Client client("127.0.0.1", "43250");
-
-    std::thread ctx([&client](){
-        client.ctx.run();
-    });
 
     std::thread handshake([&client](){
         client.Handshake();
     });
 
     handshake.join();
-    } catch (std::exception& e) {
-        std::cout << "Exception: " << e.what() << std::endl;
-    }
 
     return 0;
 }
