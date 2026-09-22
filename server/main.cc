@@ -136,7 +136,7 @@ public:
             throw std::runtime_error("panic: AES256-GCM is not supported by your hardware (CPU)");
 
         char privateKeyBytes[32];
-        size_t n = boost::beast::detail::base64::decode(&privateKeyBytes, key, strlen(key)).first;
+        boost::beast::detail::base64::decode(&privateKeyBytes, key, strlen(key));
 
         if (crypto_kx_keypair(publicKey, privateKey) != 0) {
             throw std::runtime_error("panic: check provided private key again");
