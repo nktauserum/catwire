@@ -1,4 +1,5 @@
 #include <thread>
+#include <iostream>
 
 #include <boost/asio.hpp>
 using boost::asio::ip::udp;
@@ -51,6 +52,7 @@ public:
 };
 
 int main(void) {
+    try {
     Client client("127.0.0.1", "43250");
 
     std::thread ctx([&client](){
@@ -62,6 +64,9 @@ int main(void) {
     });
 
     handshake.join();
+    } catch (std::exception& e) {
+        std::cout << "Exception: " << e.what() << std::endl;
+    }
 
     return 0;
 }
