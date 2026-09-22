@@ -38,12 +38,13 @@ typedef struct {
 
 typedef struct {
     Header  header;
-    u8      payload[65535];
+    u8      payload[65535+16];
 } __attribute__((packed)) Packet;
 
 typedef struct {
     u64     idx;
     Address addr;
+    size_t  len;
     Packet  packet;
 } IncomingBuffer;
 

@@ -52,12 +52,49 @@ public:
                 break;
 
             case HANDSHAKE: {
-                u8 secret[32] = {0};
-                if (crypto_scalarmult(secret, privateKey, buf->packet.payload) != 0) 
-                    goto cleanup;
+                if (buf->len != 32) goto cleanup;
+
+                u8 raw_secret [32]                             = {0};
+                u8 hash_args  [32*3]                           = {0};
+                u8 session_key[crypto_aead_aes256gcm_KEYBYTES] = {0};
+
+                if (crypto_scalarmult(raw_secret, privateKey, buf->packet.payload) != 0) goto cleanup;
+
+                memcpy(hash_args,    raw_secret,          32);
+                memcpy(hash_args+32, buf->packet.payload, 32);
+                memcpy(hash_args+64, publicKey,           32);
+
+                int ret = crypto_generichash(
+                    session_key, sizeof(session_key), 
+                    hash_args,   sizeof(hash_args),
+                    nullptr, 0
+                );
+
+                sodium_memzero(raw_secret, 32);
+                sodium_memzero(hash_args, 32*3);
+
+                if (ret < 0) goto cleanup; 
 
                 printf("The shared secret was computed!\n");
                 fflush(stdout);
+
+                // send the server's private key as a response
+                u32 out_idx = pool.Acquire();
+                IncomingBuffer* out_buf = &pool.data[out_idx];
+
+                out_buf->idx    = out_idx;
+                out_buf->addr   = buf->addr;
+                out_buf->packet = Packet {
+                    .header  = Header {
+                        .packetType = HANDSHAKE,
+                        .peerIndex  = 0, // temp
+                        .counter    = 0, // temp again
+                    },
+                    .payload = {0},
+                };
+                memcpy(&out_buf->packet.payload, publicKey, crypto_kx_PUBLICKEYBYTES);
+
+                udp->Send(out_buf);
 
                 break;
             }
@@ -78,7 +115,8 @@ public:
 
         memcpy(&buffer->packet, packet.payload, packet.size); // but if the incoming packet was greater than 65535+17?
         buffer->addr = packet.addr;
-        buffer->idx = incoming_counter++;
+        buffer->idx  = incoming_counter++;
+        buffer->len  = packet.size-sizeof(Header);
 
         channel.push(idx);
 

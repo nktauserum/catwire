@@ -72,7 +72,7 @@ public:
     int Open();
     bool Setup();
     void Listen(Handler*);
-    bool Send(Address, void*, size_t, u64);
+    bool Send(IncomingBuffer*);
 
     ~UDP() {
         close(fd);

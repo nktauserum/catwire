@@ -164,18 +164,18 @@ void UDP::Listen(Handler* handler) {
     }
 }
 
-bool UDP::Send(Address addr, void* payload, size_t size, u64 idx) {
+bool UDP::Send(IncomingBuffer* b) {
     struct io_uring_sqe* sqe;
     if (!get_sqe(&sqe)) return false;
 
-    auto buf = &send[idx];
+    auto buf = &send[b->idx];
     buf->vec = (struct iovec) {
-        .iov_base = payload,
-        .iov_len = size,
+        .iov_base = reinterpret_cast<void*>(&b->packet),
+        .iov_len = b->len,
     };
 
     buf->msg = (struct msghdr) { 
-        .msg_name = &addr,
+        .msg_name = &b->addr,
         .msg_namelen = sizeof(Address),
         .msg_iov = &buf->vec,
         .msg_iovlen = 1,
@@ -184,7 +184,7 @@ bool UDP::Send(Address addr, void* payload, size_t size, u64 idx) {
     };
 
     io_uring_prep_sendmsg(sqe, fd, &msg, 0);
-    io_uring_sqe_set_data64(sqe, idx);
+    io_uring_sqe_set_data64(sqe, b->idx);
 
 	sqe->flags |= IOSQE_FIXED_FILE;
     
