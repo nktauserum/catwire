@@ -89,7 +89,6 @@ public:
         [this, idx](boost::system::error_code e, std::size_t len) {
             if (e.value() != 0) {
                 std::cout << "Incoming() failed: " << e.message() << std::endl;
-                goto cleanup;
             } else {
                 IncomingBuffer* buf = &pool.data[idx];
 
