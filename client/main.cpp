@@ -86,8 +86,54 @@ public:
         socket.async_receive_from(
             boost::asio::buffer(&buf->packet, sizeof(buf->packet)),
             endpoint,
-        [this, idx](boost::system::error_code e, std::size_t received_len) {
-            std::cout << "Received packet " << received_len << " bytes" << std::endl;
+        [this, idx](boost::system::error_code e, std::size_t len) {
+            if (e.value() != 0) {
+                std::cout << "Incoming() failed: " << e.message() << std::endl;
+                goto cleanup;
+            } else {
+                IncomingBuffer* buf = &pool.data[idx];
+
+                switch (buf->packet.header.packetType) {
+                case DATA:
+                    break;
+
+                case HANDSHAKE: {
+                    if (len != 32 + sizeof(Header)) goto cleanup;
+
+                    u8 raw_secret [32]                             = {0};
+                    u8 hash_args  [32*3]                           = {0};
+                    u8 session_key[crypto_aead_aes256gcm_KEYBYTES] = {0};
+
+                    if (crypto_scalarmult(raw_secret, privateKey, buf->packet.payload) != 0) goto cleanup;
+
+                    memcpy(hash_args,    raw_secret,          32);
+                    sodium_memzero(raw_secret, 32);
+                    memcpy(hash_args+32, buf->packet.payload, 32);
+                    memcpy(hash_args+64, publicKey,           32);
+
+                    int ret = crypto_generichash(
+                        session_key, sizeof(session_key), 
+                        hash_args,   sizeof(hash_args),
+                        nullptr, 0
+                    );
+
+                    sodium_memzero(hash_args, 32*3);
+
+                    if (ret < 0) goto cleanup; 
+
+                    printf("The shared secret was computed!\n");
+                    fflush(stdout);
+
+                    break;
+                }
+
+                default:
+                    goto cleanup;
+                    break;
+                }
+            }
+
+        cleanup:
             pool.Release(idx);
             Incoming();
         });
