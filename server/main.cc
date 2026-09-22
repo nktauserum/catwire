@@ -7,8 +7,7 @@
 #include <boost/beast/core/detail/base64.hpp>
 #include <sodium.h>
 
-#include "types.h"
-#include "memory.h"
+#include "../common/types.h"
 #include "networking.h"
 
 #define WORKERS_COUNT 8

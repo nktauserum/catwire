@@ -9,7 +9,8 @@
 #include <sys/mman.h>
 #include <liburing.h>
 
-#include "types.h"
+#include "../common/types.h"
+#include "../common/models.h"
 
 #define BUF_COUNT 256
 #define BUF_SIZE 65535+16

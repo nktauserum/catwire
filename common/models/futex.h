@@ -9,7 +9,7 @@
 #include <unistd.h>
 #include <atomic>
 
-#include "types.h"
+#include "../types.h"
 
 struct Futex {
 private:
@@ -19,10 +19,10 @@ private:
 
 public:
     inline int wait(std::atomic<u32>* lock, u32 expect_val) {
-      return futex(lock, FUTEX_WAIT_PRIVATE, expect_val, NULL, NULL, 0);
+        return futex(lock, FUTEX_WAIT_PRIVATE, expect_val, NULL, NULL, 0);
     }
 
     inline int wake(std::atomic<u32>* lock) {
-      return futex(lock, FUTEX_WAKE_PRIVATE, 1, NULL, NULL, 0);
+        return futex(lock, FUTEX_WAKE_PRIVATE, 1, NULL, NULL, 0);
     }
 };
