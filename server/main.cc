@@ -59,7 +59,6 @@ public:
                 printf("The shared secret was computed!\n");
                 fflush(stdout);
 
-                auto session = shared_ptr(new Session(secret, buf->packet.payload));
                 break;
             }
 
