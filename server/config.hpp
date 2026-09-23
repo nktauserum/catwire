@@ -1,11 +1,13 @@
 #include <fstream>
-#include <iostream>
 #include <string>
 #include <string.h>
 #include <vector>
 #include <algorithm>
 #include <stdexcept>
 #include <arpa/inet.h>
+
+#define BOOST_BEAST_HEADER_ONLY
+#include <boost/beast/core/detail/base64.hpp>
 
 #include "../common/types.h"
 #include "../common/models.h"
@@ -73,6 +75,8 @@ struct Config {
                 case EXPECT_CLIENT_FIELD:
                     if (val.first == "publicKey") {
                         auto publicKey = handle_string(val.second);
+                        boost::beast::detail::base64::decode(&current_session.publicKey, publicKey.c_str(), publicKey.size());
+
                     } else if (val.first == "address") {
                         auto addr = handle_string(val.second);
                         if (inet_pton(AF_INET, addr.c_str(), &current_session.local_addr) < 0) throw std::runtime_error("error parsing client address"); // big endian
