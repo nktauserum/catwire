@@ -28,7 +28,7 @@ static std::pair<std::string, std::string> parse_field(const char* field) {
 }
 
 bool compareSessionsByAddr(const Session& a, const Session& b) {
-    return a.local_addr > b.local_addr;
+    return ntohl(a.local_addr) < ntohl(b.local_addr);
 }
 
 #define handle_string(s) s.erase(s.size()-1).erase(0, 1)
