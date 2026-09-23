@@ -36,7 +36,6 @@ public:
         udp::resolver resolver(ctx);
         udp::resolver::results_type endpoints = resolver.resolve(udp::v4(), server_addr, std::to_string(server_port));
         endpoint = *endpoints.begin();
-        // std::cout << endpoint << std::endl;
 
         run_ctx = std::thread([this](){
             ctx.run();
@@ -101,13 +100,13 @@ public:
                 case HANDSHAKE: {
                     if (len != 32 + sizeof(Header)) goto cleanup;
 
-                    u8 raw_secret [32]                             = {0};
-                    u8 hash_args  [32*3]                           = {0};
+                    u8 raw_secret [32]   = {0};
+                    u8 hash_args  [32*3] = {0};
 
                     if (crypto_scalarmult(raw_secret, privateKey, buf->packet.payload) != 0) goto cleanup;
 
                     memcpy(hash_args,    raw_secret,          32);
-                    sodium_memzero(raw_secret, 32);
+                    sodium_memzero(raw_secret,                32);
                     memcpy(hash_args+32, buf->packet.payload, 32);
                     memcpy(hash_args+64, publicKey,           32);
 
@@ -118,7 +117,6 @@ public:
                     );
 
                     sodium_memzero(hash_args, 32*3);
-
                     if (ret < 0) goto cleanup; 
 
                     puts("The shared secret was computed!");
@@ -153,8 +151,8 @@ int main(void) {
 
 
     client.Incoming();
-
     client.Wait();
+
     handshake.join();
 
     return 0;
