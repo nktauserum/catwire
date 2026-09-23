@@ -49,8 +49,6 @@ public:
                     goto cleanup;
                 }
 
-                printf("Session index == %d\n", sessionIndex);
-
                 u8 raw_secret [32]                             = {0};
                 u8 hash_args  [32*3]                           = {0};
                 u8 session_key[crypto_aead_aes256gcm_KEYBYTES] = {0};
@@ -83,8 +81,8 @@ public:
                 out_buf->packet = Packet {
                     .header  = Header {
                         .packetType = HANDSHAKE,
-                        .peerIndex  = 0, // temp
-                        .counter    = 0, // temp again
+                        .peerIndex  = routingTable.table[sessionIndex].local_addr,
+                        .counter    = routingTable.addCounter(sessionIndex),
                     },
                     .payload = {0},
                 };
