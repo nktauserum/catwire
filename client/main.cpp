@@ -47,8 +47,8 @@ public:
         if (!crypto_aead_aes256gcm_is_available()) 
             throw std::runtime_error("panic: AES256-GCM is not supported by your hardware (CPU)");
 
-        memcpy(&privateKey, key, 32);
-        if (crypto_kx_keypair(publicKey, privateKey) != 0) {
+        // memcpy(&privateKey, key, 32);
+        if (crypto_kx_seed_keypair(publicKey, privateKey, key) != 0) {
             throw std::runtime_error("panic: check provided private key again");
         }
     }
@@ -143,7 +143,7 @@ public:
 
 int main(void) {
     Config config = Config::load_from_file("config.ini");
-    Client client(config.server_addr, config.server_port, config.privateKey);
+    Client client(config.server_addr, config.server_port, config.seed);
 
     std::thread handshake([&client](){
         client.Handshake();

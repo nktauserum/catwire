@@ -1,15 +1,14 @@
 #include <fstream>
-#include <string>
 #include <string.h>
 #include <vector>
 #include <algorithm>
-#include <stdexcept>
 #include <arpa/inet.h>
 
 #define BOOST_BEAST_HEADER_ONLY
 #include <boost/beast/core/detail/base64.hpp>
 
 #include "../common/types.h"
+#include "../common/macro.h"
 #include "../common/models.h"
 
 enum State {
@@ -24,7 +23,7 @@ static std::pair<std::string, std::string> parse_field(const char* field) {
         if (field[i] == '=') return std::pair<std::string, std::string>(s.assign(field, i), std::string(&field[i+1]));
     }
 
-    throw std::runtime_error("bad field");
+    throw panic("bad field");
 }
 
 bool compareSessionsByAddr(const Session& a, const Session& b) {
@@ -35,7 +34,7 @@ bool compareSessionsByAddr(const Session& a, const Session& b) {
 #define handle_int(s) std::stoi(s)
 
 struct Config {
-    u8 secretKey[32];
+    u8 seed[32];
     u16 port;
 
     std::vector<Session> clients;
@@ -64,9 +63,9 @@ struct Config {
 
             switch (state) {
                 case EXPECT_MAIN_FIELD:
-                    if (val.first == "secretKey") { 
+                    if (val.first == "seed") { 
                         auto key_s = handle_string(val.second);
-                        boost::beast::detail::base64::decode(&config.secretKey, key_s.c_str(), key_s.size());
+                        boost::beast::detail::base64::decode(&config.seed, key_s.c_str(), key_s.size());
 
                     } else if (val.first == "port") {
                         config.port = handle_int(val.second);
@@ -81,7 +80,7 @@ struct Config {
 
                     } else if (val.first == "address") {
                         auto addr = handle_string(val.second);
-                        if (inet_pton(AF_INET, addr.c_str(), &current_session.local_addr) < 0) throw std::runtime_error("error parsing client address"); // big endian
+                        if (inet_pton(AF_INET, addr.c_str(), &current_session.local_addr) < 0) throw panic("error parsing client address"); // big endian
                     } else continue;
 
                     break;

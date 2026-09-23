@@ -21,7 +21,7 @@ static std::pair<std::string, std::string> parse_field(const char* field) {
 #define handle_int(s) std::stoi(s)
 
 struct Config {
-    u8 privateKey[32];
+    u8 seed[32];
     char server_addr[16];
     u16 server_port = 0;
 
@@ -38,9 +38,9 @@ struct Config {
 
             auto val = parse_field(s.c_str());
 
-            if (val.first == "privateKey") {         
+            if (val.first == "seed") {         
                 auto key_s = handle_string(val.second);
-                boost::beast::detail::base64::decode(&config.privateKey, key_s.c_str(), key_s.size());
+                boost::beast::detail::base64::decode(&config.seed, key_s.c_str(), key_s.size());
             } else if (val.first == "server_port") {
                 config.server_port = handle_int(val.second);
             } else if (val.first == "server_addr") {

@@ -8,14 +8,17 @@
 #include <sodium.h>
 
 #include "../common/types.h"
+
 #include "networking.hpp"
 #include "config.hpp"
+#include "routing.hpp"
 
 #define WORKERS_COUNT 8
 
 class Application : public Handler {
 private:
     UDP* udp;
+    RoutingTable routingTable;
 
     u8 publicKey[crypto_kx_PUBLICKEYBYTES] = {0};
     u8 privateKey[crypto_kx_SECRETKEYBYTES] = {0};
@@ -40,6 +43,14 @@ public:
 
             case HANDSHAKE: {
                 if (buf->len != 32) goto cleanup;
+                i32 sessionIndex = routingTable.exists(buf->packet.payload);
+                if (sessionIndex < 0) {
+                    puts("No such session index");
+                    std::cout << buf->packet.payload << std::endl;
+                    goto cleanup;
+                }
+
+                printf("Session index == %d\n", sessionIndex);
 
                 u8 raw_secret [32]                             = {0};
                 u8 hash_args  [32*3]                           = {0};
@@ -59,9 +70,7 @@ public:
                 );
 
                 sodium_memzero(hash_args, 32*3);
-
                 if (ret < 0) goto cleanup; 
-
                 printf("The shared secret was computed!\n");
                 fflush(stdout);
 
@@ -119,17 +128,18 @@ public:
         pool.Release(idx);
     }
 
-    Application(UDP* udp, u8* key) : udp{udp}, channel{Channel<u32, WORKERS_COUNT>()}, pool{SharedPool<IncomingBuffer>()} {
+    Application(UDP* udp, Config* config) : udp{udp}, channel{Channel<u32, WORKERS_COUNT>()}, pool{SharedPool<IncomingBuffer>()} {
         if (sodium_init() < 0) 
-            throw std::runtime_error("panic: failed to initialize libsodium");
+            throw panic("panic: failed to initialize libsodium");
 
         if (!crypto_aead_aes256gcm_is_available()) 
-            throw std::runtime_error("panic: AES256-GCM is not supported by your hardware (CPU)");
+            throw panic("panic: AES256-GCM is not supported by your hardware (CPU)");
 
-        memcpy(&privateKey, key, 32);
-        if (crypto_kx_keypair(publicKey, privateKey) != 0) {
-            throw std::runtime_error("panic: check provided private key again");
+        if (crypto_kx_seed_keypair(publicKey, privateKey, config->seed) != 0) {
+            throw panic("panic: check provided private key again");
         }
+
+        routingTable = RoutingTable::init_from_vec(config->clients);
     };
 };
 
@@ -141,7 +151,7 @@ int main(void) {
     if (!ok) 
         return 1;
 
-    Application app{&udp_listener, config.secretKey};
+    Application app{&udp_listener, &config};
 
     std::thread workers[WORKERS_COUNT];
     for (int i = 0; i < WORKERS_COUNT; ++i) {
