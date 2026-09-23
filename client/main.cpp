@@ -23,6 +23,8 @@ private:
 
     std::atomic<u64> peerIndex = 0;
     std::atomic<u64> counter   = 0;
+    u8 session_key[crypto_aead_aes256gcm_KEYBYTES] = {0};
+
 
     u8 publicKey[crypto_kx_PUBLICKEYBYTES] = {0};
     u8 privateKey[crypto_kx_SECRETKEYBYTES] = {0};
@@ -85,7 +87,7 @@ public:
 
         socket.async_receive_from(
             boost::asio::buffer(&buf->packet, sizeof(buf->packet)),
-            endpoint,
+            endpoint, // TODO: fix endpoint replacement
         [this, idx](boost::system::error_code e, std::size_t len) {
             if (e.value() != 0) {
                 std::cout << "Incoming() failed: " << e.message() << std::endl;
@@ -101,7 +103,6 @@ public:
 
                     u8 raw_secret [32]                             = {0};
                     u8 hash_args  [32*3]                           = {0};
-                    u8 session_key[crypto_aead_aes256gcm_KEYBYTES] = {0};
 
                     if (crypto_scalarmult(raw_secret, privateKey, buf->packet.payload) != 0) goto cleanup;
 
@@ -120,8 +121,7 @@ public:
 
                     if (ret < 0) goto cleanup; 
 
-                    printf("The shared secret was computed!\n");
-                    fflush(stdout);
+                    puts("The shared secret was computed!");
 
                     break;
                 }

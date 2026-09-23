@@ -13,19 +13,6 @@
 
 #define WORKERS_COUNT 8
 
-struct Session {
-private:
-    Address remote_addr;
-    u8 secret[crypto_scalarmult_BYTES];
-    u8 publicKey[crypto_kx_PUBLICKEYBYTES];
-
-public:
-    Session(u8* s, u8* pubkey) {
-        memcpy(&secret[0], s, crypto_kx_PUBLICKEYBYTES);
-        memcpy(&publicKey[0], pubkey, crypto_scalarmult_BYTES);
-    }
-};
-
 class Application : public Handler {
 private:
     UDP* udp;
