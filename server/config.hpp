@@ -52,8 +52,10 @@ struct Config {
             if (s[0] == '[') {
                 if (s == "[main]") state = EXPECT_MAIN_FIELD;
                 else {
-                    config.clients.push_back(current_session);
-                    current_session = {0};
+                    if (state == EXPECT_CLIENT_FIELD) {
+                        config.clients.push_back(current_session);
+                        current_session = {0};
+                    }
                     state = EXPECT_CLIENT_FIELD;
                 }
                 continue;

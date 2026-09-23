@@ -46,7 +46,6 @@ public:
                 i32 sessionIndex = routingTable.exists(buf->packet.payload);
                 if (sessionIndex < 0) {
                     puts("No such session index");
-                    std::cout << buf->packet.payload << std::endl;
                     goto cleanup;
                 }
 
