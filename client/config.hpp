@@ -1,7 +1,6 @@
 #include <fstream>
 #include <cstring>
 #include <stdexcept>
-#include <arpa/inet.h>
 
 #define BOOST_BEAST_HEADER_ONLY
 #include <boost/beast/core/detail/base64.hpp>
