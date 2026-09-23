@@ -1,5 +1,6 @@
 #include <thread>
 #include <iostream>
+#include <string>
 
 #define BOOST_BEAST_HEADER_ONLY
 #include <boost/beast/core/detail/base64.hpp>
@@ -9,6 +10,7 @@ using boost::asio::ip::udp;
 
 #include "../common/types.h"
 #include "../common/models.h"
+#include "config.hpp"
 
 class Client {
 private:
@@ -30,9 +32,9 @@ private:
     u8 privateKey[crypto_kx_SECRETKEYBYTES] = {0};
     
 public:
-    Client(const char* server_addr, const char* server_port, const char* key) : ctx{}, guard{boost::asio::make_work_guard(ctx)}, socket{udp::socket(ctx, udp::endpoint(udp::v4(), 0))} {
+    Client(const char* server_addr, u16 server_port, u8* key) : ctx{}, guard{boost::asio::make_work_guard(ctx)}, socket{udp::socket(ctx, udp::endpoint(udp::v4(), 0))} {
         udp::resolver resolver(ctx);
-        udp::resolver::results_type endpoints = resolver.resolve(udp::v4(), server_addr, server_port);
+        udp::resolver::results_type endpoints = resolver.resolve(udp::v4(), server_addr, std::to_string(server_port));
         endpoint = *endpoints.begin();
         // std::cout << endpoint << std::endl;
 
@@ -46,9 +48,7 @@ public:
         if (!crypto_aead_aes256gcm_is_available()) 
             throw std::runtime_error("panic: AES256-GCM is not supported by your hardware (CPU)");
 
-        char privateKeyBytes[32];
-        boost::beast::detail::base64::decode(&privateKeyBytes, key, strlen(key));
-
+        memcpy(&privateKey, key, 32);
         if (crypto_kx_keypair(publicKey, privateKey) != 0) {
             throw std::runtime_error("panic: check provided private key again");
         }
@@ -144,7 +144,8 @@ public:
 };
 
 int main(void) {
-    Client client("127.0.0.1", "45230", "WIzlNXUEGlpWdLaxrEL/5xuQFvVFcjCIjwub87GWrac=");
+    Config config = Config::load_from_file("config.ini");
+    Client client(config.server_addr, config.server_port, config.privateKey);
 
     std::thread handshake([&client](){
         client.Handshake();
