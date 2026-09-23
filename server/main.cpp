@@ -8,7 +8,7 @@
 #include <sodium.h>
 
 #include "../common/types.h"
-#include "networking.h"
+#include "networking.hpp"
 #include "config.hpp"
 
 #define WORKERS_COUNT 8

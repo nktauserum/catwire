@@ -3,7 +3,7 @@ CXXFLAGS = -std=c++23 -Wall -Wextra -pedantic
 LIBS = -luring -lsodium -lstdc++
 
 BUILD_DIR = build
-SRC = main.cpp networking.cpp
+SRC = main.cpp 
 OBJ = $(addprefix $(BUILD_DIR)/, $(SRC:.cpp=.o))
 TARGET = $(BUILD_DIR)/srv
 
