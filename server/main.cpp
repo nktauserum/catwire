@@ -119,16 +119,14 @@ public:
         pool.Release(idx);
     }
 
-    Application(UDP* udp, const char* key) : udp{udp}, channel{Channel<u32, WORKERS_COUNT>()}, pool{SharedPool<IncomingBuffer>()} {
+    Application(UDP* udp, u8* key) : udp{udp}, channel{Channel<u32, WORKERS_COUNT>()}, pool{SharedPool<IncomingBuffer>()} {
         if (sodium_init() < 0) 
             throw std::runtime_error("panic: failed to initialize libsodium");
 
         if (!crypto_aead_aes256gcm_is_available()) 
             throw std::runtime_error("panic: AES256-GCM is not supported by your hardware (CPU)");
 
-        char privateKeyBytes[32];
-        boost::beast::detail::base64::decode(&privateKeyBytes, key, strlen(key));
-
+        memcpy(&privateKey, key, 32);
         if (crypto_kx_keypair(publicKey, privateKey) != 0) {
             throw std::runtime_error("panic: check provided private key again");
         }
@@ -143,7 +141,7 @@ int main(void) {
     if (!ok) 
         return 1;
 
-    Application app{&udp_listener, "zb1NPTbALjQmO/aWqF2YUnRJC1igyulIsk6zQK5nhEE="};
+    Application app{&udp_listener, config.secretKey};
 
     std::thread workers[WORKERS_COUNT];
     for (int i = 0; i < WORKERS_COUNT; ++i) {

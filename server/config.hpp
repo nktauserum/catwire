@@ -35,7 +35,7 @@ bool compareSessionsByAddr(const Session& a, const Session& b) {
 #define handle_int(s) std::stoi(s)
 
 struct Config {
-    std::string secretKey;
+    u8 secretKey[32];
     u16 port;
 
     std::vector<Session> clients;
@@ -54,7 +54,7 @@ struct Config {
                 if (s == "[main]") state = EXPECT_MAIN_FIELD;
                 else {
                     config.clients.push_back(current_session);
-                    memset(&current_session, 0, sizeof(Session));
+                    current_session = {0};
                     state = EXPECT_CLIENT_FIELD;
                 }
                 continue;
@@ -65,7 +65,9 @@ struct Config {
             switch (state) {
                 case EXPECT_MAIN_FIELD:
                     if (val.first == "secretKey") { 
-                        config.secretKey = handle_string(val.second);
+                        auto key_s = handle_string(val.second);
+                        boost::beast::detail::base64::decode(&config.secretKey, key_s.c_str(), key_s.size());
+
                     } else if (val.first == "port") {
                         config.port = handle_int(val.second);
                     } else continue;
