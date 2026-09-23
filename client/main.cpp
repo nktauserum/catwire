@@ -121,6 +121,8 @@ public:
 
                     puts("The shared secret was computed!");
 
+                    peerIndex.store(buf->packet.header.peerIndex);
+
                     break;
                 }
 
