@@ -9,7 +9,3 @@ struct Session {
     u32 local_addr;
     Address remote_addr;
 };
-
-bool compareSessionsByAddr(const Session& a, const Session& b) {
-    return a.local_addr < b.local_addr;
-}

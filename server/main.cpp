@@ -1,6 +1,5 @@
 #include <string.h>
 #include <stdio.h>
-#include <iostream>
 #include <thread>
 #include <stdexcept>
 
@@ -10,6 +9,7 @@
 
 #include "../common/types.h"
 #include "networking.h"
+#include "config.hpp"
 
 #define WORKERS_COUNT 8
 
@@ -136,6 +136,8 @@ public:
 };
 
 int main(void) {
+    auto config = Config::load_from_file("config.ini");
+
     UDP udp_listener; 
     bool ok = udp_listener.Setup();
     if (!ok) 
