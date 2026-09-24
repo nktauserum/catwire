@@ -85,10 +85,10 @@ public:
                 };
                 memcpy(&out_buf->packet.payload, publicKey, crypto_kx_PUBLICKEYBYTES);
 
-                // if (!udp->Send(out_buf)) {
-                //     puts("UDP::Send() failed");
-                //     goto cleanup;
-                // }
+                if (!udp->send(out_buf)) {
+                    puts("UDP::Send() failed");
+                    goto cleanup;
+                }
 
                 break;
             }

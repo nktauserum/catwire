@@ -156,4 +156,22 @@ public:
     inline void advance_queue(int count) {
         io_uring_cq_advance(&ring, count);
     }
+
+    inline struct io_uring_sqe* sqe() {
+        struct io_uring_sqe* sqe = io_uring_get_sqe(&ring);
+        if (!sqe) {
+            io_uring_submit(&ring);
+            sqe = io_uring_get_sqe(&ring);    
+            if (!sqe) {
+                fprintf(stderr, "cannot get sqe\n");
+                return nullptr;
+            }
+        }
+
+        return sqe;
+    }
+
+    inline void submit() {
+        io_uring_submit(&ring);
+    }
 };
