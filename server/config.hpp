@@ -19,7 +19,7 @@ enum State {
 static std::pair<std::string, std::string> parse_field(const char* field) {
     std::string s;
     size_t len = strlen(field);
-    for (int i = 0; i < len; ++i) {
+    for (size_t i = 0; i < len; ++i) {
         if (field[i] == '=') return std::pair<std::string, std::string>(s.assign(field, i), std::string(&field[i+1]));
     }
 

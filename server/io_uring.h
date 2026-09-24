@@ -74,7 +74,7 @@ public:
             return ret;
         }
 
-        for (int i = 0; i < entries; i++) {
+        for (u32 i = 0; i < entries; i++) {
             io_uring_buf_ring_add(buf_ring, BUF_OFFSET(base, i), buffer_size, i,
                           io_uring_buf_ring_mask(entries), i);
         }
