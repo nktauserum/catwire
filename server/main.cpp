@@ -1,7 +1,6 @@
 #include <string.h>
 #include <stdio.h>
 #include <thread>
-#include <stdexcept>
 
 #define BOOST_BEAST_HEADER_ONLY
 #include <boost/beast/core/detail/base64.hpp>
@@ -9,7 +8,7 @@
 
 #include "../common/types.h"
 
-#include "networking.hpp"
+#include "transport.h"
 #include "config.hpp"
 #include "routing.hpp"
 
@@ -17,17 +16,17 @@
 
 class Application : public Handler {
 private:
-    UDP* udp;
+    UDP<WORKERS_COUNT>* udp;
     RoutingTable routingTable;
 
     u8 publicKey[crypto_kx_PUBLICKEYBYTES] = {0};
     u8 privateKey[crypto_kx_SECRETKEYBYTES] = {0};
 
+    u64 incoming_counter = 0;
+public: 
     Channel<u32, WORKERS_COUNT> channel;
     SharedPool<IncomingBuffer> pool;
 
-    u64 incoming_counter = 0;
-public: 
     inline void worker() {
         auto queue = channel.add_worker();
 
@@ -88,10 +87,10 @@ public:
                 };
                 memcpy(&out_buf->packet.payload, publicKey, crypto_kx_PUBLICKEYBYTES);
 
-                if (!udp->Send(out_buf)) {
-                    puts("UDP::Send() failed");
-                    goto cleanup;
-                }
+                // if (!udp->Send(out_buf)) {
+                //     puts("UDP::Send() failed");
+                //     goto cleanup;
+                // }
 
                 break;
             }
@@ -125,7 +124,7 @@ public:
         pool.Release(idx);
     }
 
-    Application(UDP* udp, Config* config) : udp{udp}, channel{Channel<u32, WORKERS_COUNT>()}, pool{SharedPool<IncomingBuffer>()} {
+    Application(UDP<WORKERS_COUNT>* udp, Config* config) : udp{udp}, channel{Channel<u32, WORKERS_COUNT>()}, pool{SharedPool<IncomingBuffer>()} {
         if (sodium_init() < 0) 
             throw panic("panic: failed to initialize libsodium");
 
@@ -143,10 +142,8 @@ public:
 int main(void) {
     auto config = Config::load_from_file("config.ini");
 
-    UDP udp_listener; 
-    bool ok = udp_listener.Setup();
-    if (!ok) 
-        return 1;
+    UDP<WORKERS_COUNT> udp_listener; 
+    if (!udp_listener.init(config.port)) return 1;
 
     Application app{&udp_listener, &config};
 
@@ -158,7 +155,7 @@ int main(void) {
     }
 
     // std::thread incoming([&app, &udp_listener](){
-        udp_listener.Listen(&app);
+        udp_listener.listen(&app.pool, &app.channel);
     // });
 
 

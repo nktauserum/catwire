@@ -6,7 +6,7 @@
 #include "queue.h"
 #include "../types.h"
 
-template <typename T, int workers_count>
+template <typename T, int workers_count = 1>
 class Channel {
 private:
     Queue<T> workers[workers_count];
