@@ -14,19 +14,17 @@
 
 #define WORKERS_COUNT 8
 
-class Application : public Handler {
+class Application {
 private:
-    UDP<WORKERS_COUNT>* udp;
+    UDP* udp;
     RoutingTable routingTable;
 
     u8 publicKey[crypto_kx_PUBLICKEYBYTES] = {0};
     u8 privateKey[crypto_kx_SECRETKEYBYTES] = {0};
 
-    u64 incoming_counter = 0;
-public: 
-    Channel<u32, WORKERS_COUNT> channel;
+    Channel<u32> channel;
     SharedPool<IncomingBuffer> pool;
-
+public: 
     inline void worker() {
         auto queue = channel.add_worker();
 
@@ -105,26 +103,11 @@ public:
         }
     }
 
-    inline void incomingRecvCallback(UDPPacket packet) override {
-        int idx = pool.Acquire();
-        IncomingBuffer* buffer = &pool.data[idx];
-
-        memcpy(&buffer->packet, packet.payload, packet.size); // but if the incoming packet was greater than 65535+17?
-        buffer->addr = packet.addr;
-        buffer->idx  = incoming_counter++;
-        buffer->len  = packet.size-sizeof(Header);
-
-        channel.push(idx);
-
-        printf("Incoming packet: payload %lu bytes, idx %lu, buf idx %d\n", packet.size, incoming_counter - 1, idx);
-        fflush(stdout);
+    inline void listen_incoming() {
+        udp->listen(&pool, &channel);
     }
 
-    inline void incomingSendCallback(u32 idx) override {
-        pool.Release(idx);
-    }
-
-    Application(UDP<WORKERS_COUNT>* udp, Config* config) : udp{udp}, channel{Channel<u32, WORKERS_COUNT>()}, pool{SharedPool<IncomingBuffer>()} {
+    Application(UDP* udp, Config* config) : udp{udp}, channel{Channel<u32>(WORKERS_COUNT)}, pool{SharedPool<IncomingBuffer>()} {
         if (sodium_init() < 0) 
             throw panic("panic: failed to initialize libsodium");
 
@@ -142,12 +125,12 @@ public:
 int main(void) {
     auto config = Config::load_from_file("config.ini");
 
-    UDP<WORKERS_COUNT> udp_listener; 
+    UDP udp_listener;
     if (!udp_listener.init(config.port)) return 1;
 
     Application app{&udp_listener, &config};
 
-    std::thread workers[WORKERS_COUNT];
+    std::vector<std::thread> workers(WORKERS_COUNT);
     for (int i = 0; i < WORKERS_COUNT; ++i) {
         workers[i] = std::thread([&app](){
             app.worker();
@@ -155,7 +138,7 @@ int main(void) {
     }
 
     // std::thread incoming([&app, &udp_listener](){
-        udp_listener.listen(&app.pool, &app.channel);
+        app.listen_incoming();
     // });
 
 

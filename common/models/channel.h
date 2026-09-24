@@ -5,11 +5,13 @@
 
 #include "queue.h"
 #include "../types.h"
+#include "../macro.h"
 
-template <typename T, int workers_count = 1>
-class Channel {
+template <typename T>
+struct Channel {
 private:
-    Queue<T> workers[workers_count];
+    Queue<T> *workers;
+    alignas(64) int size = 1;
     alignas(64) int count = 0;
     alignas(64) u32 next = 0;
 
@@ -19,7 +21,7 @@ public:
     }
 
     void push(T item) {
-        int idx = (reinterpret_cast<std::atomic<u32>*>(&next)->fetch_add(1, std::memory_order_relaxed) - 1) % workers_count;
+        int idx = (reinterpret_cast<std::atomic<u32>*>(&next)->fetch_add(1, std::memory_order_relaxed) - 1) % size;
         Queue<T>& worker = workers[idx];
 
         T* buf;
@@ -33,6 +35,11 @@ public:
             worker.waiting.store(0, std::memory_order_relaxed);
             worker.futex.wake(&worker.waiting);
         }
+    }
+
+    Channel(int size) : size{size} {
+        workers = reinterpret_cast<Queue<T>*>(calloc(size, sizeof(Queue<T>)));
+        if (!workers) throw panic("buy more ram lol");
     }
 };
 

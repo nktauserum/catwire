@@ -13,7 +13,6 @@
 #include "../common/macro.h"
 #include "../common/models.h"
 
-template <int workers>
 class UDP {
     int fd;
 
@@ -78,7 +77,7 @@ public:
         return ring.register_fd(fd);
     }
 
-    void listen(SharedPool<IncomingBuffer>* pool, Channel<u32, workers>* channel) {
+    void listen(SharedPool<IncomingBuffer>* pool, Channel<u32>* channel) {
         struct io_uring_cqe* *cqes = reinterpret_cast<struct io_uring_cqe**>(calloc(entries*2, sizeof(struct io_uring_cqe*))); // possibly null, idc
                                                                                                                              
         while (true) {
