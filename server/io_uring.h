@@ -27,7 +27,6 @@ class Ring {
     u32 entries = 256;
     u64 buffer_size = 65535+16;
 
-    struct io_uring_cqe *cqes = nullptr;
 public:
     inline bool init(u32 entries, u64 buffer_size) {
         this->entries = entries;
@@ -79,9 +78,6 @@ public:
                           io_uring_buf_ring_mask(entries), i);
         }
         io_uring_buf_ring_advance(buf_ring, entries);
-
-        cqes = reinterpret_cast<struct io_uring_cqe*>(calloc(entries*2, sizeof(struct io_uring_cqe*)));
-        if (!cqes) return 1;
 
         return func(&ring, &msg);
     }
