@@ -150,10 +150,10 @@ public:
     inline void packet_recycle(struct io_uring_cqe* cqe) {
         int idx = cqe->flags >> 16;
         io_uring_buf_ring_add(buf_ring, BUF_OFFSET(base, idx), buffer_size, idx, io_uring_buf_ring_mask(entries), 0);
-        io_uring_buf_ring_advance(buf_ring, 1);
     }
 
     inline void advance_queue(int count) {
+        io_uring_buf_ring_advance(buf_ring, count);
         io_uring_cq_advance(&ring, count);
     }
 
