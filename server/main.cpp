@@ -8,7 +8,7 @@
 
 #include "../common/types.h"
 
-#include "transport.h"
+#include "incoming.hpp"
 #include "config.hpp"
 #include "routing.h"
 
@@ -16,7 +16,7 @@
 
 class Application {
 private:
-    UDP udp;
+    Incoming incoming;
     RoutingTable routingTable;
 
     u8 publicKey[crypto_kx_PUBLICKEYBYTES] = {0};
@@ -85,8 +85,8 @@ public:
                 };
                 memcpy(&out_buf->packet.payload, publicKey, crypto_kx_PUBLICKEYBYTES);
 
-                if (!udp.send(out_buf)) {
-                    puts("UDP::Send() failed");
+                if (!incoming.send(out_buf)) {
+                    puts("Incoming::Send() failed");
                     goto cleanup;
                 }
 
@@ -104,11 +104,11 @@ public:
     }
 
     inline void listen_incoming() {
-        udp.listen(&pool, &channel);
+        incoming.listen(&pool, &channel);
     }
 
-    Application(UDP& udp, Config* config) : channel{Channel<u32>(WORKERS_COUNT)}, pool{SharedPool<IncomingBuffer>()} {
-        this->udp = std::move(udp);
+    Application(Incoming& incoming, Config* config) : channel{Channel<u32>(WORKERS_COUNT)}, pool{SharedPool<IncomingBuffer>()} {
+        this->incoming = std::move(incoming);
         if (sodium_init() < 0) 
             throw panic("panic: failed to initialize libsodium");
 
@@ -126,10 +126,10 @@ public:
 int main(void) {
     auto config = Config::load_from_file("config.ini");
 
-    UDP udp_listener;
-    if (!udp_listener.init(config.port)) return 1;
+    Incoming incoming;
+    if (!incoming.init(config.port)) return 1;
 
-    Application app{udp_listener, &config};
+    Application app{incoming, &config};
 
     std::vector<std::thread> workers(WORKERS_COUNT);
     for (int i = 0; i < WORKERS_COUNT; ++i) {
