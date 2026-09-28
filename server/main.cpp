@@ -16,7 +16,7 @@
 
 class Application {
 private:
-    UDP* udp;
+    UDP udp;
     RoutingTable routingTable;
 
     u8 publicKey[crypto_kx_PUBLICKEYBYTES] = {0};
@@ -25,7 +25,7 @@ private:
     Channel<u32> channel;
     SharedPool<IncomingBuffer> pool;
 public: 
-    inline void worker() {
+    void worker() {
         auto queue = channel.add_worker();
 
         while (true) {
@@ -85,7 +85,7 @@ public:
                 };
                 memcpy(&out_buf->packet.payload, publicKey, crypto_kx_PUBLICKEYBYTES);
 
-                if (!udp->send(out_buf)) {
+                if (!udp.send(out_buf)) {
                     puts("UDP::Send() failed");
                     goto cleanup;
                 }
@@ -104,10 +104,11 @@ public:
     }
 
     inline void listen_incoming() {
-        udp->listen(&pool, &channel);
+        udp.listen(&pool, &channel);
     }
 
-    Application(UDP* udp, Config* config) : udp{udp}, channel{Channel<u32>(WORKERS_COUNT)}, pool{SharedPool<IncomingBuffer>()} {
+    Application(UDP& udp, Config* config) : channel{Channel<u32>(WORKERS_COUNT)}, pool{SharedPool<IncomingBuffer>()} {
+        this->udp = std::move(udp);
         if (sodium_init() < 0) 
             throw panic("panic: failed to initialize libsodium");
 
@@ -128,7 +129,7 @@ int main(void) {
     UDP udp_listener;
     if (!udp_listener.init(config.port)) return 1;
 
-    Application app{&udp_listener, &config};
+    Application app{udp_listener, &config};
 
     std::vector<std::thread> workers(WORKERS_COUNT);
     for (int i = 0; i < WORKERS_COUNT; ++i) {
