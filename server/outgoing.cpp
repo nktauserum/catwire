@@ -6,35 +6,49 @@
 #include <sys/ioctl.h>
 #include <unistd.h>
 
+#define QUEUE_ENTRIES 256
+#define BUFFER_SIZE 65535
+
 bool Outgoing::init(const char* ifname) {
-    int tun_fd, rc;
-	size_t ifname_len;
-	struct ifreq setiff_request;
+	size_t ifname_len = strlen(ifname);
+    if (ifname_len >= IFNAMSIZ) {
+        return false;
+    }
 
-    i16 flags = IFF_TUN | IFF_NO_PI | IFF_MULTI_QUEUE | IFF_VNET_HDR;
+    struct ifreq ifr = {0};
+    ifr.ifr_flags = IFF_TUN | IFF_NO_PI | IFF_MULTI_QUEUE | IFF_VNET_HDR;
+    memcpy(ifr.ifr_ifrn.ifrn_name, ifname, ifname_len);
 
-	if (ifname != NULL) {
-		ifname_len = strlen(name);
-		if (ifname_len >= IFNAMSIZ) {
-			return false;
-		}
-	}
+    int i;
+    for (i = 0; i < TUN_QUEUE_COUNT; ++i) {
+        int qfd = open("/dev/net/tun", O_RDWR);
+        if (qfd == -1) {
+            goto cleanup;
+        }
 
-	tun_fd = open("/dev/net/tun", O_RDWR | O_CLOEXEC);
-	if (tun_fd == -1) {
-		return false;
-	}
+        int rc = ioctl(qfd, TUNSETIFF, &ifr);
+        if (rc == -1) {
+            close(qfd);
+            goto cleanup;
+        }
 
-	memset(&setiff_request, 0, sizeof setiff_request);
-	setiff_request.ifr_flags = flags;
-	rc = ioctl(tun_fd, TUNSETIFF, &setiff_request);
-	if (rc == -1) {
-		close(tun_fd);
-		return false;
-	}
+        fds[i] = qfd;
+    }
 
-    fd = tun_fd;
-    memcpy(name, setiff_request.ifr_name, IFNAMSIZ);
+    memcpy(name, ifr.ifr_name, IFNAMSIZ);
+
+    if (!ring.init(QUEUE_ENTRIES, BUFFER_SIZE)) 
+        goto cleanup;
+
+    for (int j = 0; j < TUN_QUEUE_COUNT; j++) {
+        if (!ring.register_fd(fds[j]))
+            goto cleanup;
+    }
 
     return true;
+
+cleanup:
+    for (--i; i >= 0; i--)
+        close(fds[i]);
+    return false;
 }
