@@ -103,7 +103,7 @@ public:
         }
     }
 
-    inline void listen_incoming() {
+    void listen_incoming() {
         incoming.listen(&pool, &channel);
     }
 

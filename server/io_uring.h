@@ -28,7 +28,7 @@ class Ring {
     u64 buffer_size = 65535+16;
 
 public:
-    inline bool init(u32 entries, u64 buffer_size) {
+    bool init(u32 entries, u64 buffer_size) {
         this->entries = entries;
         this->buffer_size = buffer_size;
 
@@ -82,7 +82,7 @@ public:
         return func(&ring, &msg);
     }
 
-    inline bool register_fd(int fd) {
+    bool register_fd(int fd) {
         // memset(&msg, 0, sizeof(msg));
         // msg.msg_namelen = sizeof(struct sockaddr_storage);
         // msg.msg_controllen = 0;
