@@ -3,6 +3,7 @@
 #include <thread>
 #include <shared_mutex>
 #include <mutex>
+#include <linux/ip.h>
 
 #include <sodium.h>
 
@@ -108,6 +109,8 @@ public:
 
                     ret = crypto_aead_aes256gcm_beforenm(&session->crypto_ctx, session->shared_key);
                     if (ret < 0) goto cleanup;
+
+                    session->remote_addr = buf->addr;
                 }
 
                 sodium_memzero(hash_args, 32*3);
@@ -126,7 +129,7 @@ public:
                     .header  = Header {
                         .packetType = HANDSHAKE,
                         .peerIndex  = routingTable.table[sessionIndex].local_addr,
-                        .counter    = routingTable.addCounter(sessionIndex),
+                        .counter    = routingTable.table[sessionIndex].add_counter(),
                     },
                     .payload = {0},
                 };
@@ -161,7 +164,42 @@ public:
 
             OutgoingBuffer* buf = &outgoingPool.data[idx];
 
-            // process
+            u32 out_idx = incomingPool.Acquire();
+            IncomingBuffer* out_buf = &incomingPool.data[out_idx];
+
+            {
+                if (unlikely(buf->len <= sizeof(struct iphdr))) {
+                    incomingPool.Release(idx);
+                    goto cleanup;
+                }
+
+                u32 dest_ip = reinterpret_cast<struct iphdr*>(buf->payload)->daddr;
+                u32 session_idx = reinterpret_cast<u8*>(&dest_ip)[3]-2;
+
+                auto session = &routingTable.table[session_idx];
+
+                u64 counter = session->add_counter(); // atomic operation, so keep before the lock
+                u8 nonce[12];
+                memcpy(&nonce[4], &counter, sizeof(u64));
+
+                std::shared_lock<std::shared_mutex> lock(session->mtx);
+
+                int res = crypto_aead_aes256gcm_encrypt_afternm(
+                    out_buf->packet.payload, &out_buf->len,
+                    buf->payload, buf->len,
+                    NULL, 0, NULL,
+                    nonce, &session->crypto_ctx
+                );
+                if (res < 0) {
+                    incomingPool.Release(out_idx);
+                    goto cleanup;
+                }
+                out_buf->addr = session->remote_addr;
+            }
+
+            incoming.send(out_buf);
+    cleanup:
+            outgoingPool.Release(idx);
         }
     }
 
