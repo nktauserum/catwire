@@ -23,7 +23,7 @@ public:
 
     inline T* acquire() {
         if (head - tail_cache == QUEUE_SIZE) {
-            tail_cache = reinterpret_cast<std::atomic<u32>*>(&tail)->load(std::memory_order_consume);
+            tail_cache = std::atomic_ref<u32>(tail).load(std::memory_order_consume);
             if (unlikely(head - tail_cache == QUEUE_SIZE)) {
                 return nullptr;
             }
@@ -33,7 +33,7 @@ public:
     }
 
     inline void push() {
-        reinterpret_cast<std::atomic<u32>*>(&head)->store(head+1, std::memory_order_release);
+        std::atomic_ref<u32>(head).fetch_add(1, std::memory_order_release);
     }
 
     inline T* read() {
@@ -45,7 +45,7 @@ public:
     }
 
     inline void pop() {
-        reinterpret_cast<std::atomic<u32>*>(&tail)->store(tail+1, std::memory_order_release);
+        std::atomic_ref<u32>(tail).fetch_add(1, std::memory_order_release);
     }
 };
 
