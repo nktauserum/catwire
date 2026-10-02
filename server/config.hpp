@@ -12,6 +12,7 @@
 #include "../common/models.h"
 
 enum State {
+    BEGIN,
     EXPECT_MAIN_FIELD,
     EXPECT_CLIENT_FIELD,
 };
@@ -34,7 +35,7 @@ bool compareClientsByAddr(const Client& a, const Client& b) {
 #define handle_int(s) std::stoi(s)
 
 struct Config {
-    u8 seed[32];
+    u8 seed[32] = {0};
     u16 port;
 
     std::vector<Client> clients;
@@ -44,8 +45,8 @@ struct Config {
         std::ifstream f(filename);
 
         std::string s;
-        State state;
-        Client current_client;
+        State state = BEGIN;
+        Client current_client = {0};
 
         while (std::getline(f, s)) {
             if (s == "") continue;
@@ -64,6 +65,9 @@ struct Config {
             auto val = parse_field(s.c_str());
 
             switch (state) {
+                case BEGIN:
+                    throw panic("panic: config should start with [main]");
+
                 case EXPECT_MAIN_FIELD:
                     if (val.first == "seed") { 
                         auto key_s = handle_string(val.second);

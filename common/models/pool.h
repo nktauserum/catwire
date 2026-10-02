@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdlib>
 #include <thread>
 #include <atomic>
 
@@ -12,7 +13,7 @@ private:
     std::atomic<u64> bitmap;
 
 public:
-    T data[64];
+    T* data;
 
     int Acquire() {
         for (;;) {
@@ -33,6 +34,5 @@ public:
         bitmap.fetch_or(1ull << idx);
     }
 
-    SharedPool() : bitmap{static_cast<u64>(~0)} {}
-
+    SharedPool() : bitmap{static_cast<u64>(~0)}, data{reinterpret_cast<T*>(calloc(64, sizeof(T)))} {}
 };

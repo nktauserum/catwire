@@ -1,9 +1,9 @@
 CXX = g++
-CXXFLAGS = -std=c++23 -Wall -Wextra -pedantic
-LIBS = -luring -lsodium -lstdc++
+CXXFLAGS = -std=c++23 -Wall -Wextra -pedantic -g  -fsanitize=undefined
+LIBS = -luring -lsodium -lstdc++ -fsanitize=undefined
 
 BUILD_DIR = build
-SRC = main.cpp incoming.cpp
+SRC = main.cpp incoming.cpp outgoing.cpp
 OBJ = $(addprefix $(BUILD_DIR)/, $(SRC:.cpp=.o))
 TARGET = $(BUILD_DIR)/srv
 

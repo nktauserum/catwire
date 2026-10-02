@@ -1,6 +1,8 @@
 #include <string.h>
 #include <stdio.h>
 #include <thread>
+#include <shared_mutex>
+#include <mutex>
 
 #define BOOST_BEAST_HEADER_ONLY
 #include <boost/beast/core/detail/base64.hpp>
@@ -17,8 +19,6 @@
 
 class Application {
 private:
-    Incoming     incoming;
-    Outgoing     outgoing;
     RoutingTable routingTable;
 
     u8 publicKey [crypto_kx_PUBLICKEYBYTES] = {0};
@@ -29,6 +29,10 @@ private:
 
     SharedPool<IncomingBuffer> incomingPool;
     SharedPool<OutgoingBuffer> outgoingPool;
+
+    Incoming     incoming;
+    Outgoing     outgoing;
+
 public: 
     void incomingWorker() {
         auto queue = incomingChannel.add_worker();
@@ -40,8 +44,13 @@ public:
             IncomingBuffer* buf = &incomingPool.data[idx];
 
             switch (buf->packet.header.packetType) {
-            case DATA:
+            case DATA: {
+                auto peer_idx = buf->packet.header.peerIndex;
+                if (peer_idx >= MAX_CLIENTS) goto cleanup;
+
+                auto session = &routingTable.table[peer_idx];
                 break;
+            }
 
             case HANDSHAKE: {
                 if (buf->len != 32) goto cleanup;
@@ -51,9 +60,10 @@ public:
                     goto cleanup;
                 }
 
+                auto session = &routingTable.table[sessionIndex];
+
                 u8 raw_secret [32]                             = {0};
                 u8 hash_args  [32*3]                           = {0};
-                u8 session_key[crypto_aead_aes256gcm_KEYBYTES] = {0};
 
                 if (crypto_scalarmult(raw_secret, privateKey, buf->packet.payload) != 0) goto cleanup;
 
@@ -61,15 +71,21 @@ public:
                 sodium_memzero(raw_secret, 32);
                 memcpy(hash_args+32, buf->packet.payload, 32);
                 memcpy(hash_args+64, publicKey,           32);
+                
+                {
+                    std::unique_lock<std::shared_mutex> lock(session->mtx);
 
-                int ret = crypto_generichash(
-                    session_key, sizeof(session_key), 
-                    hash_args,   sizeof(hash_args),
-                    nullptr, 0
-                );
+                    int ret = crypto_generichash(
+                        session->shared_key, 32, 
+                        hash_args,           sizeof(hash_args),
+                        nullptr,             0
+                    );
+
+                    if (ret < 0) goto cleanup;
+                }
 
                 sodium_memzero(hash_args, 32*3);
-                if (ret < 0) goto cleanup; 
+
                 printf("The shared secret was computed!\n");
                 fflush(stdout);
 
@@ -94,6 +110,8 @@ public:
                     puts("Incoming::Send() failed");
                     goto cleanup;
                 }
+
+                session->is_active.store(1);
 
                 break;
             }
@@ -129,16 +147,15 @@ public:
         outgoing.listen(&outgoingPool, &outgoingChannel);
     }
 
-    Application(Incoming& incoming, Outgoing& outgoing, Config* config) : 
+    Application(Incoming& incoming, Config* config) : 
         incomingChannel{Channel<u32>(WORKERS_COUNT)}, 
         incomingPool{SharedPool<IncomingBuffer>()},
+        incoming{std::move(incoming)},
         outgoingChannel{Channel<u32>(WORKERS_COUNT)},
         outgoingPool{SharedPool<OutgoingBuffer>()},
+        outgoing{std::move(outgoing)},
         routingTable{RoutingTable(config->clients)}
     {
-        this->incoming = std::move(incoming);
-        this->outgoing = std::move(outgoing);
-
         if (sodium_init() < 0) 
             throw panic("panic: failed to initialize libsodium");
 
@@ -152,7 +169,7 @@ public:
 };
 
 int main(void) {
-    auto config = Config::load_from_file("config.ini");
+    Config config = Config::load_from_file("config.ini");
 
     Incoming incoming;
     if (!incoming.init(config.port)) return 1;
@@ -160,7 +177,7 @@ int main(void) {
     Outgoing outgoing;
     if (!outgoing.init("cw1")) return 1;
 
-    Application app{incoming, outgoing, &config};
+    Application app{incoming, &config};
 
     std::thread workers[WORKERS_COUNT*2];
     for (int i = 0; i < WORKERS_COUNT; ++i) {
