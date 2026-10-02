@@ -17,23 +17,28 @@ private:
 
 public:
     Queue<T>* add_worker() {
-        return &workers[reinterpret_cast<std::atomic<int>*>(&count)->fetch_add(1, std::memory_order_relaxed)];
+        return &workers[std::atomic_ref<int>(count).fetch_add(1, std::memory_order_relaxed)];
     }
 
     void push(T item) {
-        int idx = (reinterpret_cast<std::atomic<u32>*>(&next)->fetch_add(1, std::memory_order_relaxed) - 1) % size;
-        Queue<T>& worker = workers[idx];
+        while (1) {
+            int idx = (std::atomic_ref<u32>(next).fetch_add(1, std::memory_order_relaxed) - 1) % size;
+            Queue<T>& worker = workers[idx];
 
-        T* buf;
-        while (!(buf = worker.acquire())) {
-            std::this_thread::yield(); // give the item to another worker if this is unavailable?
-        }
-        *buf = item;
-        worker.push();
+            T* buf;
+            if (!(buf = worker.acquire())) {
+                std::this_thread::yield(); // is it really necessary? 
+                continue;
+            }
+            *buf = item;
+            worker.push();
 
-        if (worker.waiting.load(std::memory_order_relaxed)) {
-            worker.waiting.store(0, std::memory_order_relaxed);
-            worker.futex.wake(&worker.waiting);
+            if (worker.waiting.load(std::memory_order_relaxed)) {
+                worker.waiting.store(0, std::memory_order_relaxed);
+                worker.futex.wake(&worker.waiting);
+            }
+
+            break;
         }
     }
 
