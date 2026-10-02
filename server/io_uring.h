@@ -104,7 +104,7 @@ public:
         return io_uring_peek_batch_cqe(&ring, cqes, size);
     }
 
-    inline bool packet_check(struct io_uring_cqe* cqe) {
+    bool packet_check(struct io_uring_cqe* cqe) {
         if (unlikely(!(cqe->flags & IORING_CQE_F_MORE))) {
             func(&ring, &msg); 
             return false;
@@ -116,9 +116,9 @@ public:
         return true;
     }
 
-    inline struct io_uring_recvmsg_out* packet_process(struct io_uring_cqe* cqe) {
+    struct io_uring_recvmsg_out* packet_process(struct io_uring_cqe* cqe) {
         int idx = cqe->flags >> 16;
-        struct io_uring_recvmsg_out *out = io_uring_recvmsg_validate(BUF_OFFSET(base, idx), cqe->res, &msg);
+        struct io_uring_recvmsg_out *out = io_uring_recvmsg_validate(BUF_OFFSET(base, idx), cqe->res, &msg); // shared object, возможен data race в многопотоке
         if (unlikely(out == nullptr)) {
             return nullptr;
         }
@@ -129,6 +129,10 @@ public:
         }
 
         return out;
+    }
+
+    void* payload(u32 idx) {
+        return BUF_OFFSET(base, idx);
     }
 
     inline struct sockaddr_in* packet_address(struct io_uring_recvmsg_out* msg) {

@@ -22,7 +22,7 @@ class Incoming {
     struct {
         struct msghdr msg;
         struct iovec vec;
-    } send_queue[entries];
+    } send_queue[64];
 
     static inline bool setup_ring(struct io_uring* ring, struct msghdr* msg) {
         memset(msg, 0, sizeof(struct msghdr));

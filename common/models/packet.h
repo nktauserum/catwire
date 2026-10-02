@@ -31,3 +31,8 @@ typedef struct {
     Packet  packet;
 } IncomingBuffer;
 
+typedef struct {
+    size_t len;
+    u64 idx;
+    u8 payload[65535];
+} OutgoingBuffer;
