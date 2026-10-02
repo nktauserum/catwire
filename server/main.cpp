@@ -10,7 +10,7 @@
 
 #include "incoming.hpp"
 #include "config.hpp"
-#include "routing.h"
+#include "routing.hpp"
 
 #define WORKERS_COUNT 8
 
