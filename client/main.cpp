@@ -12,7 +12,7 @@ using boost::asio::ip::udp;
 #include "../common/models.h"
 #include "config.hpp"
 
-class Client {
+class Application {
 private:
     boost::asio::io_context ctx;
     std::thread run_ctx;
@@ -32,7 +32,7 @@ private:
     u8 privateKey[crypto_kx_SECRETKEYBYTES] = {0};
     
 public:
-    Client(const char* server_addr, u16 server_port, u8* key) : ctx{}, guard{boost::asio::make_work_guard(ctx)}, socket{udp::socket(ctx, udp::endpoint(udp::v4(), 0))} {
+    Application(const char* server_addr, u16 server_port, u8* key) : ctx{}, guard{boost::asio::make_work_guard(ctx)}, socket{udp::socket(ctx, udp::endpoint(udp::v4(), 0))} {
         udp::resolver resolver(ctx);
         udp::resolver::results_type endpoints = resolver.resolve(udp::v4(), server_addr, std::to_string(server_port));
         endpoint = *endpoints.begin();
@@ -145,7 +145,7 @@ public:
 
 int main(void) {
     Config config = Config::load_from_file("config.ini");
-    Client client(config.server_addr, config.server_port, config.seed);
+    Application client(config.server_addr, config.server_port, config.seed);
 
     std::thread handshake([&client](){
         client.Handshake();
