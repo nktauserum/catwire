@@ -96,6 +96,16 @@ public:
         return true;
     }
 
+    bool register_fds(const int* fds, int count) {
+        int ret = io_uring_register_files(&ring, fds, count);
+        if (ret) {
+            fprintf(stderr, "register files: %s\n", strerror(-ret));
+            return false;
+        }
+
+        return true;
+    }
+
     inline int wait() {
         return io_uring_submit_and_wait(&ring, 1);
     } 

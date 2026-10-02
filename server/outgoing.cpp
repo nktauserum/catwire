@@ -37,10 +37,9 @@ bool Outgoing::init(const char* ifname) {
     if (!ring.init(entries, buffer_size)) 
         goto cleanup;
 
-    for (int j = 0; j < TUN_QUEUE_COUNT; j++) {
-        if (!ring.register_fd(fds[j]))
-            goto cleanup;
-    }
+    
+    if (!ring.register_fds(fds, TUN_QUEUE_COUNT))
+        goto cleanup;
 
     return true;
 

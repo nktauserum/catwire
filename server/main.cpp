@@ -172,10 +172,16 @@ int main(void) {
     Config config = Config::load_from_file("config.ini");
 
     Incoming incoming;
-    if (!incoming.init(config.port)) return 1;
+    if (!incoming.init(config.port)) {
+        perror("Incoming::init()");
+        return 1;
+    }
 
     Outgoing outgoing;
-    if (!outgoing.init("cw1")) return 1;
+    if (!outgoing.init("cw1")) {
+        perror("Outgoing::init()");
+        return 1;
+    }
 
     Application app{incoming, outgoing, &config};
 

@@ -1,6 +1,6 @@
 CXX = g++
-CXXFLAGS = -std=c++23 -Wall -Wextra -pedantic -g  -fsanitize=undefined
-LIBS = -luring -lsodium -lstdc++ -fsanitize=undefined
+CXXFLAGS = -std=c++23 -Wall -Wextra -pedantic -g 
+LIBS = -luring -lsodium -lstdc++ 
 
 BUILD_DIR = build
 SRC = main.cpp incoming.cpp outgoing.cpp
