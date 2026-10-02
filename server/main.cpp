@@ -4,8 +4,6 @@
 #include <shared_mutex>
 #include <mutex>
 
-#define BOOST_BEAST_HEADER_ONLY
-#include <boost/beast/core/detail/base64.hpp>
 #include <sodium.h>
 
 #include "../common/types.h"
@@ -49,6 +47,32 @@ public:
                 if (peer_idx >= MAX_CLIENTS) goto cleanup;
 
                 auto session = &routingTable.table[peer_idx];
+
+                u8 nonce[12] = {0};
+                memcpy(&nonce[4], &buf->packet.header.counter, sizeof(u64));
+
+                u32 out_idx = outgoingPool.Acquire();
+                auto out_buf = &outgoingPool.data[out_idx];
+                {
+                    std::shared_lock<std::shared_mutex> lock(session->mtx);
+                    if (!session->is_active) {  // drop all packets for an unavailable session
+                        outgoingPool.Release(out_idx);
+                        goto cleanup;
+                    }
+
+                    int ret = crypto_aead_aes256gcm_decrypt_afternm(
+                        out_buf->payload, &out_buf->len, nullptr, 
+                        buf->packet.payload, buf->len,
+                        nullptr, 0, // additional data
+                        nonce, &session->crypto_ctx
+                    );
+                    if (ret < 0) {
+                        outgoingPool.Release(out_idx);
+                        goto cleanup;
+                    }
+                }
+
+                outgoing.write(out_buf);
                 break;
             }
 
@@ -80,7 +104,9 @@ public:
                         hash_args,           sizeof(hash_args),
                         nullptr,             0
                     );
+                    if (ret < 0) goto cleanup;
 
+                    ret = crypto_aead_aes256gcm_beforenm(&session->crypto_ctx, session->shared_key);
                     if (ret < 0) goto cleanup;
                 }
 

@@ -27,12 +27,12 @@ typedef struct {
 typedef struct {
     u64     idx;
     Address addr;
-    size_t  len;
+    u64     len;
     Packet  packet;
 } IncomingBuffer;
 
 typedef struct {
-    size_t len;
-    u64 idx;
-    u8 payload[65535];
+    long long unsigned int len; // strange :)
+    u64                    idx;
+    u8                     payload[65535];
 } OutgoingBuffer;
