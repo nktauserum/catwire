@@ -9,6 +9,7 @@
 #include "../common/types.h"
 
 #include "incoming.hpp"
+#include "outgoing.hpp"
 #include "config.hpp"
 #include "routing.hpp"
 
@@ -16,23 +17,27 @@
 
 class Application {
 private:
-    Incoming incoming;
+    Incoming     incoming;
+    Outgoing     outgoing;
     RoutingTable routingTable;
 
-    u8 publicKey[crypto_kx_PUBLICKEYBYTES] = {0};
+    u8 publicKey [crypto_kx_PUBLICKEYBYTES] = {0};
     u8 privateKey[crypto_kx_SECRETKEYBYTES] = {0};
 
-    Channel<u32> channel;
-    SharedPool<IncomingBuffer> pool;
+    Channel<u32> incomingChannel;
+    Channel<u32> outgoingChannel;
+
+    SharedPool<IncomingBuffer> incomingPool;
+    SharedPool<OutgoingBuffer> outgoingPool;
 public: 
-    void worker() {
-        auto queue = channel.add_worker();
+    void incomingWorker() {
+        auto queue = incomingChannel.add_worker();
 
         while (true) {
             u32 idx = *queue->read();
             queue->pop();
 
-            IncomingBuffer* buf = &pool.data[idx];
+            IncomingBuffer* buf = &incomingPool.data[idx];
 
             switch (buf->packet.header.packetType) {
             case DATA:
@@ -69,8 +74,8 @@ public:
                 fflush(stdout);
 
                 // send the server's private key as a response
-                u32 out_idx = pool.Acquire();
-                IncomingBuffer* out_buf = &pool.data[out_idx];
+                u32 out_idx = incomingPool.Acquire();
+                IncomingBuffer* out_buf = &incomingPool.data[out_idx];
 
                 out_buf->idx    = out_idx;
                 out_buf->addr   = buf->addr;
@@ -99,16 +104,41 @@ public:
             }
 
     cleanup:
-            pool.Release(idx);
+            incomingPool.Release(idx);
+        }
+    }
+
+    void outgoingWorker() {
+        auto queue = outgoingChannel.add_worker(); 
+
+        while (true) {
+            u32 idx = *queue->read();
+            queue->pop();
+
+            OutgoingBuffer* buf = &outgoingPool.data[idx];
+
+            // process
         }
     }
 
     void listen_incoming() {
-        incoming.listen(&pool, &channel);
+        incoming.listen(&incomingPool, &incomingChannel);
     }
 
-    Application(Incoming& incoming, Config* config) : channel{Channel<u32>(WORKERS_COUNT)}, pool{SharedPool<IncomingBuffer>()}, routingTable{RoutingTable(config->clients)} {
+    void listen_outgoing() {
+        outgoing.listen(&outgoingPool, &outgoingChannel);
+    }
+
+    Application(Incoming& incoming, Outgoing& outgoing, Config* config) : 
+        incomingChannel{Channel<u32>(WORKERS_COUNT)}, 
+        incomingPool{SharedPool<IncomingBuffer>()},
+        outgoingChannel{Channel<u32>(WORKERS_COUNT)},
+        outgoingPool{SharedPool<OutgoingBuffer>()},
+        routingTable{RoutingTable(config->clients)}
+    {
         this->incoming = std::move(incoming);
+        this->outgoing = std::move(outgoing);
+
         if (sodium_init() < 0) 
             throw panic("panic: failed to initialize libsodium");
 
@@ -127,21 +157,28 @@ int main(void) {
     Incoming incoming;
     if (!incoming.init(config.port)) return 1;
 
-    Application app{incoming, &config};
+    Outgoing outgoing;
+    if (!outgoing.init("cw1")) return 1;
 
-    std::vector<std::thread> workers(WORKERS_COUNT);
+    Application app{incoming, outgoing, &config};
+
+    std::thread workers[WORKERS_COUNT*2];
     for (int i = 0; i < WORKERS_COUNT; ++i) {
         workers[i] = std::thread([&app](){
-            app.worker();
+            app.incomingWorker();
+        });
+    }
+    for (int i = WORKERS_COUNT; i < WORKERS_COUNT*2; ++i) {
+        workers[i] = std::thread([&app](){
+            app.outgoingWorker();
         });
     }
 
-    // std::thread incoming([&app, &udp_listener](){
+    std::thread i([&app](){
         app.listen_incoming();
-    // });
+    });
 
-
-    // incoming.join();
-
+    app.listen_outgoing();
+    
     return 0;
 }
