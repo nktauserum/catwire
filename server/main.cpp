@@ -147,7 +147,7 @@ public:
         outgoing.listen(&outgoingPool, &outgoingChannel);
     }
 
-    Application(Incoming& incoming, Config* config) : 
+    Application(Incoming& incoming, Outgoing& outgoing, Config* config) : 
         incomingChannel{Channel<u32>(WORKERS_COUNT)}, 
         incomingPool{SharedPool<IncomingBuffer>()},
         incoming{std::move(incoming)},
@@ -177,7 +177,7 @@ int main(void) {
     Outgoing outgoing;
     if (!outgoing.init("cw1")) return 1;
 
-    Application app{incoming, &config};
+    Application app{incoming, outgoing, &config};
 
     std::thread workers[WORKERS_COUNT*2];
     for (int i = 0; i < WORKERS_COUNT; ++i) {
