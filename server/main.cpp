@@ -107,7 +107,7 @@ public:
         incoming.listen(&pool, &channel);
     }
 
-    Application(Incoming& incoming, Config* config) : channel{Channel<u32>(WORKERS_COUNT)}, pool{SharedPool<IncomingBuffer>()} {
+    Application(Incoming& incoming, Config* config) : channel{Channel<u32>(WORKERS_COUNT)}, pool{SharedPool<IncomingBuffer>()}, routingTable{RoutingTable(config->clients)} {
         this->incoming = std::move(incoming);
         if (sodium_init() < 0) 
             throw panic("panic: failed to initialize libsodium");
@@ -118,8 +118,6 @@ public:
         if (crypto_kx_seed_keypair(publicKey, privateKey, config->seed) != 0) {
             throw panic("panic: check provided private key again");
         }
-
-        routingTable = RoutingTable::init_from_vec(config->clients);
     };
 };
 

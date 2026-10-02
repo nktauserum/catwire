@@ -26,7 +26,7 @@ static std::pair<std::string, std::string> parse_field(const char* field) {
     throw panic("bad field");
 }
 
-bool compareSessionsByAddr(const Session& a, const Session& b) {
+bool compareClientsByAddr(const Client& a, const Client& b) {
     return ntohl(a.local_addr) < ntohl(b.local_addr);
 }
 
@@ -37,7 +37,7 @@ struct Config {
     u8 seed[32];
     u16 port;
 
-    std::vector<Session> clients;
+    std::vector<Client> clients;
 
     static Config load_from_file(const char* filename) {
         Config config;
@@ -45,7 +45,7 @@ struct Config {
 
         std::string s;
         State state;
-        Session current_session;
+        Client current_client;
 
         while (std::getline(f, s)) {
             if (s == "") continue;
@@ -53,8 +53,8 @@ struct Config {
                 if (s == "[main]") state = EXPECT_MAIN_FIELD;
                 else {
                     if (state == EXPECT_CLIENT_FIELD) {
-                        config.clients.push_back(current_session);
-                        current_session = {0};
+                        config.clients.push_back(current_client);
+                        current_client = {0};
                     }
                     state = EXPECT_CLIENT_FIELD;
                 }
@@ -78,20 +78,20 @@ struct Config {
                 case EXPECT_CLIENT_FIELD:
                     if (val.first == "publicKey") {
                         auto publicKey = handle_string(val.second);
-                        boost::beast::detail::base64::decode(&current_session.publicKey, publicKey.c_str(), publicKey.size());
+                        boost::beast::detail::base64::decode(&current_client.publicKey, publicKey.c_str(), publicKey.size());
 
                     } else if (val.first == "address") {
                         auto addr = handle_string(val.second);
-                        if (inet_pton(AF_INET, addr.c_str(), &current_session.local_addr) < 0) throw panic("error parsing client address"); // big endian
+                        if (inet_pton(AF_INET, addr.c_str(), &current_client.local_addr) < 0) throw panic("error parsing client address"); // big endian
                     } else continue;
 
                     break;
             }
         }
     
-        config.clients.push_back(current_session);
+        config.clients.push_back(current_client);
 
-        std::sort(config.clients.begin(), config.clients.end(), compareSessionsByAddr);
+        std::sort(config.clients.begin(), config.clients.end(), compareClientsByAddr);
         return config;
     }
 };
