@@ -90,3 +90,14 @@ void Outgoing::listen(SharedPool<OutgoingBuffer>* pool, Channel<u32>* channel) {
         ring.advance_queue(count);
     }
 }
+
+bool Outgoing::write(OutgoingBuffer* b) {
+    struct io_uring_sqe* sqe = ring.sqe();
+    if (unlikely(!sqe)) return false;
+
+    io_uring_prep_send(sqe, fds[0], b->payload, b->len, 0); // TODO: use not only the first fd
+    io_uring_sqe_set_data64(sqe, b->idx);
+    ring.submit();
+
+    return true;
+}

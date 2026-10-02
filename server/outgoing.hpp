@@ -46,4 +46,5 @@ class Outgoing {
 public:
     bool init(const char*);
     void listen(SharedPool<OutgoingBuffer>*, Channel<u32>*);
+    bool write(OutgoingBuffer*);
 };
