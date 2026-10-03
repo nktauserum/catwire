@@ -40,7 +40,7 @@ public:
         while (true) {
             u32 idx = *queue->read();
             queue->pop();
-
+            std::cout << "incoming: buf #" << idx << std::endl;
             IncomingBuffer* buf = &incomingPool.data[idx];
 
             switch (buf->packet.header.packetType) {

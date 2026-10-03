@@ -256,6 +256,12 @@ public:
                         goto cleanup;
                     }
                 }
+
+                out_buf->packet.header = {
+                    .packetType = DATA, 
+                    .peerIndex = peerIndex.load(std::memory_order_relaxed),
+                    .counter = c,
+                };
                 
                 socket.async_send_to(
                     boost::asio::buffer(&out_buf->packet, out_buf->len+sizeof(Header)), 
