@@ -1,6 +1,9 @@
 #include <iostream>
-#include <thread>
 #include <string>
+
+#include <thread>
+#include <mutex>
+#include <shared_mutex>
 
 #ifdef __linux__
 #include <fcntl.h>
@@ -66,7 +69,10 @@ private:
 
     std::atomic<u64> peerIndex = 0;
     std::atomic<u64> counter   = 0;
+
+    std::shared_mutex mtx;
     u8 session_key[crypto_aead_aes256gcm_KEYBYTES] = {0};
+    crypto_aead_aes256gcm_state crypto_ctx;
 
     u8 publicKey[crypto_kx_PUBLICKEYBYTES] = {0};
     u8 privateKey[crypto_kx_SECRETKEYBYTES] = {0};
@@ -133,8 +139,34 @@ public:
                 IncomingBuffer* buf = &incoming_pool.data[idx];
 
                 switch (buf->packet.header.packetType) {
-                case DATA:
+                case DATA: {
+                    u8 nonce[12] = {0};
+                    memcpy(&nonce[4], &buf->packet.header.counter, sizeof(u64));
+
+                    u32 out_idx = outgoing_pool.Acquire();
+                    OutgoingBuffer* out_buf = &outgoing_pool.data[out_idx];
+
+                    std::shared_lock<std::shared_mutex> lock(mtx);
+
+                    int ret = crypto_aead_aes256gcm_decrypt_afternm(
+                        out_buf->payload, &out_buf->len, nullptr,
+                        buf->packet.payload, buf->len,
+                        nullptr, 0,
+                        nonce, &crypto_ctx
+                    );
+                    if (ret < 0) {
+                        outgoing_pool.Release(out_idx);
+                        goto cleanup;
+                    }
+
+                    tun_stream.async_write_some(
+                        boost::asio::buffer(&out_buf->payload, out_buf->len),
+                    [this, out_idx](boost::system::error_code e, std::size_t len){
+                        outgoing_pool.Release(out_idx); 
+                    });
+
                     break;
+                }
 
                 case HANDSHAKE: {
                     if (len != 32 + sizeof(Header)) goto cleanup;
@@ -142,25 +174,36 @@ public:
                     u8 raw_secret [32]   = {0};
                     u8 hash_args  [32*3] = {0};
 
-                    if (crypto_scalarmult(raw_secret, privateKey, buf->packet.payload) != 0) goto cleanup;
+                    {
+                        std::unique_lock<std::shared_mutex> lock(mtx);
 
-                    memcpy(hash_args,    raw_secret,          32);
-                    sodium_memzero(raw_secret,                32);
-                    memcpy(hash_args+32, buf->packet.payload, 32);
-                    memcpy(hash_args+64, publicKey,           32);
+                        if (crypto_scalarmult(raw_secret, privateKey, buf->packet.payload) != 0) goto cleanup;
 
-                    int ret = crypto_generichash(
-                        session_key, sizeof(session_key), 
-                        hash_args,   sizeof(hash_args),
-                        nullptr, 0
-                    );
+                        memcpy(hash_args,    raw_secret,          32);
+                        sodium_memzero(raw_secret,                32);
+                        memcpy(hash_args+32, buf->packet.payload, 32);
+                        memcpy(hash_args+64, publicKey,           32);
+
+                        int ret = crypto_generichash(
+                            session_key, sizeof(session_key), 
+                            hash_args,   sizeof(hash_args),
+                            nullptr, 0
+                        );
+                        if (ret < 0) goto cleanup; 
+
+                        ret = crypto_aead_aes256gcm_beforenm(&crypto_ctx, session_key);
+                        if (ret < 0) goto cleanup;
+                    }
 
                     sodium_memzero(hash_args, 32*3);
-                    if (ret < 0) goto cleanup; 
 
                     puts("The shared secret was computed!");
 
-                    peerIndex.store(buf->packet.header.peerIndex);
+                    int peer_idx = reinterpret_cast<u8*>(&buf->packet.header.peerIndex)[3]-2;
+                    if (peer_idx < 0)
+                        goto cleanup;
+
+                    peerIndex.store(peer_idx);
 
                     break;
                 }
