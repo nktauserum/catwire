@@ -40,13 +40,12 @@ public:
         while (true) {
             u32 idx = *queue->read();
             queue->pop();
-            std::cout << "incoming: buf #" << idx << std::endl;
             IncomingBuffer* buf = &incomingPool.data[idx];
 
             switch (buf->packet.header.packetType) {
             case DATA: {
                 auto peer_idx = buf->packet.header.peerIndex;
-                std::cout << "DATA: incoming packet to session: idx " << peer_idx << std::endl;
+                std::cout << "DATA: incoming packet to session: idx " << peer_idx << " size " << buf->len << std::endl;
                 if (peer_idx >= MAX_CLIENTS) goto cleanup;
 
                 auto session = &routingTable.table[peer_idx];
@@ -98,8 +97,8 @@ public:
 
                 memcpy(hash_args,    raw_secret,          32);
                 sodium_memzero(raw_secret, 32);
-                memcpy(hash_args+32, buf->packet.payload, 32);
-                memcpy(hash_args+64, publicKey,           32);
+                memcpy(hash_args+32, publicKey, 32);
+                memcpy(hash_args+64, buf->packet.payload,           32);
                 
                 {
                     std::unique_lock<std::shared_mutex> lock(session->mtx);
