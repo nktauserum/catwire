@@ -179,7 +179,7 @@ public:
                 auto session = &routingTable.table[session_idx];
 
                 u64 counter = session->add_counter(); // atomic operation, so keep before the lock
-                u8 nonce[12];
+                u8 nonce[12] = {0};
                 memcpy(&nonce[4], &counter, sizeof(u64));
 
                 std::shared_lock<std::shared_mutex> lock(session->mtx);
