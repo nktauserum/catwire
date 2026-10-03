@@ -136,6 +136,7 @@ public:
             if (e.value() != 0) {
                 std::cout << "Incoming() failed: " << e.message() << std::endl;
             } else {
+                std::cout << "Received " << len << " bytes from UDP" << std::endl; 
                 IncomingBuffer* buf = &incoming_pool.data[idx];
 
                 switch (buf->packet.header.packetType) {
@@ -150,7 +151,7 @@ public:
 
                     int ret = crypto_aead_aes256gcm_decrypt_afternm(
                         out_buf->payload, &out_buf->len, nullptr,
-                        buf->packet.payload, buf->len,
+                        buf->packet.payload, len - sizeof(Header),
                         nullptr, 0,
                         nonce, &crypto_ctx
                     );
@@ -205,6 +206,8 @@ public:
 
                     peerIndex.store(peer_idx);
 
+                    Outgoing();
+
                     break;
                 }
 
@@ -230,6 +233,7 @@ public:
             if (e.value() != 0) 
                 std::cout << "Outgoing() failed: " << e.message() << std::endl;
             else {
+                std::cout << "Read " << len << " bytes from TUN" << std::endl;
                 OutgoingBuffer* buf = &outgoing_pool.data[idx];
 
                 u64 c = counter.fetch_add(1, std::memory_order_relaxed);
@@ -243,7 +247,7 @@ public:
                     std::shared_lock<std::shared_mutex> lock(mtx);
                     int res = crypto_aead_aes256gcm_encrypt_afternm(
                         out_buf->packet.payload, &out_buf->len,
-                        buf->payload, buf->len,
+                        buf->payload, len,
                         NULL, 0, NULL,
                         nonce, &crypto_ctx
                     );
@@ -258,6 +262,7 @@ public:
                     endpoint, 
                 [this, out_idx](boost::system::error_code e, std::size_t sent_len)
                 {
+                    std::cout << "Sent packet " << sent_len << " bytes" << std::endl;
                     incoming_pool.Release(out_idx);
                 });
             }
@@ -284,15 +289,10 @@ int main(void) {
 
     Application client(config.server_addr, config.server_port, config.seed, tun_fd);
 
-    std::thread handshake([&client](){
-        client.Handshake();
-    });
-
+    client.Handshake();
 
     client.Incoming();
     client.Wait();
-
-    handshake.join();
 
     return 0;
 }

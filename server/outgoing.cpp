@@ -13,7 +13,7 @@ bool Outgoing::init(const char* ifname) {
     }
 
     struct ifreq ifr = {0};
-    ifr.ifr_flags = IFF_TUN | IFF_NO_PI | IFF_MULTI_QUEUE | IFF_VNET_HDR;
+    ifr.ifr_flags = IFF_TUN | IFF_NO_PI | IFF_MULTI_QUEUE;
     memcpy(ifr.ifr_ifrn.ifrn_name, ifname, ifname_len);
 
     int i;
@@ -64,7 +64,11 @@ void Outgoing::listen(SharedPool<OutgoingBuffer>* pool, Channel<u32>* channel) {
         int count = ring.batch(cqes, entries*2);
         for (int i = 0; i < count; ++i) {
             if (unlikely(!ring.packet_check(cqes[i]))) continue;
-            if (cqes[i]->res < 0) continue;
+            if (cqes[i]->res < 0) {
+                fprintf(stderr, "tun write failed: %d\n", cqes[i]->res);
+                pool->Release(cqes[i]->user_data);
+                continue;
+            }
 
             if (cqes[i]->user_data > entries) {
                 u32 idx = pool->Acquire();
@@ -94,7 +98,7 @@ bool Outgoing::write(OutgoingBuffer* b) {
     struct io_uring_sqe* sqe = ring.sqe();
     if (unlikely(!sqe)) return false;
 
-    io_uring_prep_send(sqe, fds[0], b->payload, b->len, 0); // TODO: use not only the first fd
+    io_uring_prep_write(sqe, fds[0], b->payload, b->len, 0); // TODO: use not only the first fd
     io_uring_sqe_set_data64(sqe, b->idx);
     ring.submit();
 

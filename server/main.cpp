@@ -1,5 +1,6 @@
 #include <string.h>
 #include <stdio.h>
+#include <iostream>
 #include <thread>
 #include <shared_mutex>
 #include <mutex>
@@ -45,6 +46,7 @@ public:
             switch (buf->packet.header.packetType) {
             case DATA: {
                 auto peer_idx = buf->packet.header.peerIndex;
+                std::cout << "DATA: incoming packet to session: idx " << peer_idx << std::endl;
                 if (peer_idx >= MAX_CLIENTS) goto cleanup;
 
                 auto session = &routingTable.table[peer_idx];
@@ -57,6 +59,7 @@ public:
                 {
                     std::shared_lock<std::shared_mutex> lock(session->mtx);
                     if (!session->is_active) {  // drop all packets for an unavailable session
+                        std::cout << "Error: send packet to the unavailable session: idx " << peer_idx << std::endl;
                         outgoingPool.Release(out_idx);
                         goto cleanup;
                     }
@@ -68,6 +71,7 @@ public:
                         nonce, &session->crypto_ctx
                     );
                     if (ret < 0) {
+                        std::cout << "Error decrypt an incoming message: code " << ret << std::endl;
                         outgoingPool.Release(out_idx);
                         goto cleanup;
                     }
@@ -115,6 +119,8 @@ public:
 
                 sodium_memzero(hash_args, 32*3);
 
+                session->is_active.store(1);
+
                 printf("The shared secret was computed!\n");
                 fflush(stdout);
 
@@ -139,8 +145,6 @@ public:
                     puts("Incoming::Send() failed");
                     goto cleanup;
                 }
-
-                session->is_active.store(1);
 
                 break;
             }
@@ -176,6 +180,7 @@ public:
                 u32 dest_ip = reinterpret_cast<struct iphdr*>(buf->payload)->daddr;
                 u32 session_idx = reinterpret_cast<u8*>(&dest_ip)[3]-2;
 
+                std::cout << "Out: receive a packet for session: idx " << session_idx << std::endl;
                 auto session = &routingTable.table[session_idx];
 
                 u64 counter = session->add_counter(); // atomic operation, so keep before the lock
@@ -191,6 +196,7 @@ public:
                     nonce, &session->crypto_ctx
                 );
                 if (res < 0) {
+                    std::cout << "Error encrypt outgoing packet: ret " << res << std::endl;
                     incomingPool.Release(out_idx);
                     goto cleanup;
                 }
