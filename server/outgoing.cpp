@@ -3,6 +3,7 @@
 #include <fcntl.h>
 #include <linux/if_tun.h>
 #include <cstring>
+#include <iostream>
 #include <sys/ioctl.h>
 #include <unistd.h>
 
@@ -51,7 +52,7 @@ cleanup:
 
 void Outgoing::listen(SharedPool<OutgoingBuffer>* pool, Channel<u32>* channel) {
     struct io_uring_cqe* *cqes = reinterpret_cast<struct io_uring_cqe**>(calloc(entries*2, sizeof(struct io_uring_cqe*))); // possibly null, idc
-                                                                                 
+
     while (true) {
         int ret = ring.wait();
         if (unlikely(ret == -EINTR))
@@ -62,15 +63,20 @@ void Outgoing::listen(SharedPool<OutgoingBuffer>* pool, Channel<u32>* channel) {
         }
 
         int count = ring.batch(cqes, entries*2);
+        std::cout << "Listen TUN: got " << count << " packets" << std::endl;
         for (int i = 0; i < count; ++i) {
-            if (unlikely(!ring.packet_check(cqes[i]))) continue;
             if (cqes[i]->res < 0) {
-                fprintf(stderr, "tun write failed: %d\n", cqes[i]->res);
+                fprintf(stderr, "tun failed: %d\n", cqes[i]->res);
                 pool->Release(cqes[i]->user_data);
                 continue;
             }
 
-            if (cqes[i]->user_data > entries) {
+            if (unlikely(!ring.packet_check(cqes[i]))) {
+                std::cout << "packet check failed" << std::endl;
+                continue;
+            }
+
+            if (cqes[i]->user_data > entries) { // read callback
                 u32 idx = pool->Acquire();
                 OutgoingBuffer* buf = &pool->data[idx];
 
@@ -81,9 +87,10 @@ void Outgoing::listen(SharedPool<OutgoingBuffer>* pool, Channel<u32>* channel) {
 
                 channel->push(idx);
 
-                printf("Incoming packet: size %d\n", sz);
+                printf("TUN packet: size %d\n", sz);
                 fflush(stdout);
-            } else {
+            } else { // write callback
+                std::cout << "Write callback: release " << cqes[i]->user_data << std::endl;
                 pool->Release(cqes[i]->user_data);
             }
 

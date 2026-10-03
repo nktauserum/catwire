@@ -79,7 +79,7 @@ public:
         }
         io_uring_buf_ring_advance(buf_ring, entries);
 
-        return func(&ring, &msg);
+        return true;
     }
 
     bool register_fd(int fd) {
@@ -93,7 +93,7 @@ public:
             return false;
         }
 
-        return true;
+        return func(&ring, &msg);
     }
 
     bool register_fds(const int* fds, int count) {
@@ -103,7 +103,7 @@ public:
             return false;
         }
 
-        return true;
+        return func(&ring, &msg);
     }
 
     inline int wait() {

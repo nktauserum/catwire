@@ -75,7 +75,7 @@ public:
                         goto cleanup;
                     }
                 }
-
+                out_buf->idx = out_idx;
                 outgoing.write(out_buf);
                 break;
             }
@@ -166,7 +166,7 @@ public:
             queue->pop();
 
             OutgoingBuffer* buf = &outgoingPool.data[idx];
-
+            std::cout << "incoming: size " << buf->len << std::endl;
             u32 out_idx = incomingPool.Acquire();
             IncomingBuffer* out_buf = &incomingPool.data[out_idx];
 
@@ -200,6 +200,12 @@ public:
                     goto cleanup;
                 }
                 out_buf->addr = session->remote_addr;
+
+                out_buf->packet.header = {
+                    .packetType = DATA,
+                    .peerIndex = session_idx,
+                    .counter = counter,
+                };
             }
 
             incoming.send(out_buf);
