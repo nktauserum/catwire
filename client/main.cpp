@@ -142,20 +142,23 @@ public:
                 switch (buf->packet.header.packetType) {
                 case DATA: {
                     u8 nonce[12] = {0};
-                    memcpy(&nonce[4], &buf->packet.header.counter, sizeof(u64));
+                    u64 counter = __builtin_bswap64(buf->packet.header.counter);
+                    memcpy(&nonce[4], &counter, sizeof(u64));
 
                     u32 out_idx = outgoing_pool.Acquire();
                     OutgoingBuffer* out_buf = &outgoing_pool.data[out_idx];
 
                     std::shared_lock<std::shared_mutex> lock(mtx);
 
+                    print_hex(nonce, 12);
                     int ret = crypto_aead_aes256gcm_decrypt_afternm(
                         out_buf->payload, &out_buf->len, nullptr,
-                        buf->packet.payload, len - sizeof(Header),
+                        buf->packet.payload, len,
                         nullptr, 0,
                         nonce, &crypto_ctx
                     );
                     if (ret < 0) {
+                        std::cout << "Error decrypting incoming message: code " << ret << std::endl; 
                         outgoing_pool.Release(out_idx);
                         goto cleanup;
                     }
@@ -238,7 +241,8 @@ public:
 
                 u64 c = counter.fetch_add(1, std::memory_order_relaxed);
                 u8 nonce[12] = {0};
-                memcpy(&nonce[4], &c, sizeof(u64));
+                u64 bcounter = __builtin_bswap64(c);
+                memcpy(&nonce[4], &bcounter, sizeof(u64));
  
                 u32 out_idx = incoming_pool.Acquire();
                 IncomingBuffer* out_buf = &incoming_pool.data[out_idx];

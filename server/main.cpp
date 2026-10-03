@@ -51,7 +51,8 @@ public:
                 auto session = &routingTable.table[peer_idx];
 
                 u8 nonce[12] = {0};
-                memcpy(&nonce[4], &buf->packet.header.counter, sizeof(u64));
+                u64 bcounter = __builtin_bswap64(buf->packet.header.counter);
+                memcpy(&nonce[4], &bcounter, sizeof(u64));
 
                 u32 out_idx = outgoingPool.Acquire();
                 auto out_buf = &outgoingPool.data[out_idx];
@@ -184,8 +185,10 @@ public:
 
                 u64 counter = session->add_counter(); // atomic operation, so keep before the lock
                 u8 nonce[12] = {0};
-                memcpy(&nonce[4], &counter, sizeof(u64));
+                u64 bcounter = __builtin_bswap64(counter);
+                memcpy(&nonce[4], &bcounter, sizeof(u64));
 
+                print_hex(nonce, 12);
                 std::shared_lock<std::shared_mutex> lock(session->mtx);
 
                 int res = crypto_aead_aes256gcm_encrypt_afternm(
