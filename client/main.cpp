@@ -232,6 +232,34 @@ public:
             else {
                 OutgoingBuffer* buf = &outgoing_pool.data[idx];
 
+                u64 c = counter.fetch_add(1, std::memory_order_relaxed);
+                u8 nonce[12] = {0};
+                memcpy(&nonce[4], &c, sizeof(u64));
+ 
+                u32 out_idx = incoming_pool.Acquire();
+                IncomingBuffer* out_buf = &incoming_pool.data[out_idx];
+
+                {
+                    std::shared_lock<std::shared_mutex> lock(mtx);
+                    int res = crypto_aead_aes256gcm_encrypt_afternm(
+                        out_buf->packet.payload, &out_buf->len,
+                        buf->payload, buf->len,
+                        NULL, 0, NULL,
+                        nonce, &crypto_ctx
+                    );
+                    if (res < 0) {
+                        incoming_pool.Release(out_idx);
+                        goto cleanup;
+                    }
+                }
+                
+                socket.async_send_to(
+                    boost::asio::buffer(&out_buf->packet, out_buf->len+sizeof(Header)), 
+                    endpoint, 
+                [this, out_idx](boost::system::error_code e, std::size_t sent_len)
+                {
+                    incoming_pool.Release(out_idx);
+                });
             }
 
         cleanup:
