@@ -91,10 +91,8 @@ bool Incoming::send(IncomingBuffer* b) {
         .msg_namelen    = sizeof(Address),
         .msg_iov        = &buf->vec,
         .msg_iovlen     = 1,
-        .__pad1         = 0,
         .msg_control    = nullptr,
         .msg_controllen = 0,
-        .__pad2         = 0,
         .msg_flags      = 0,
     };
 
