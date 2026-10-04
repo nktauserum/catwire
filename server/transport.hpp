@@ -20,7 +20,8 @@ public:
 
         SharedPool<OutgoingBuffer>* pool;
 
-        int __process_data(Packet*, u32);
+        int __process_data(Packet*, u32, Address);
+        int __process_handshake(Packet*, u32, Address);
     public:
         void Incoming();
 

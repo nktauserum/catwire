@@ -6,40 +6,6 @@
 #include <liburing.h>
 #include <sodium.h>
 
-int Transport::Worker::__process_data(Packet* packet, u32 sz) {
-    u32 peer_idx = packet->header.peerIndex;
-    if (peer_idx >= MAX_CLIENTS) return -1; 
-
-    auto session = &rtable->table[peer_idx];
-    if (!session->is_active.load(std::memory_order_consume)) return -1;
-    
-    u8 nonce[12] = {0};
-    u64 bcounter = __builtin_bswap64(packet->header.counter);
-    memcpy(&nonce[4], &bcounter, sizeof(u64));
-
-    u32 idx = pool->Acquire();
-    auto buf = &pool->data[idx];
-
-    int ret;
-    {
-        std::shared_lock<std::shared_mutex> lock(session->mtx);
-        ret = crypto_aead_aes256gcm_decrypt_afternm(
-            buf->payload, &buf->len, nullptr,
-            packet->payload, sz - sizeof(Header),
-            nullptr, 0,
-            nonce, &session->crypto_ctx
-        );
-    }
-    if (ret < 0) {
-        std::cout << "Error decrypt an incoming message: code " << ret << std::endl;
-        pool->Release(idx);
-        return -1;
-    }
-    
-    return idx;
-}
-
-
 void Transport::Worker::Incoming() {
     std::vector<struct io_uring_cqe*> cqes(entries*2);
 
@@ -75,18 +41,19 @@ void Transport::Worker::Incoming() {
                 Packet* packet = reinterpret_cast<Packet*>(io_uring_recvmsg_payload(out, &msg));
                 u32 sz = io_uring_recvmsg_payload_length(out, cqe->res, &msg);
 
+                int idx;
                 switch (packet->header.packetType) {
-                case DATA: { 
-                   int idx = __process_data(packet, sz);
-                   if (idx < 0) goto cleanup;
-
-                   ch->push(static_cast<u32>(idx));
-                }
-                case HANDSHAKE: {}
-
+                case DATA: 
+                    idx = __process_data(packet, sz, *addr);
+                case HANDSHAKE: 
+                    idx = __process_handshake(packet, sz, *addr);
                 default:
                     goto cleanup;
-                } 
+                }
+
+                if (idx < 0) goto cleanup;
+                ch->push(static_cast<u32>(idx));
+
             }
 
         cleanup:
@@ -96,4 +63,71 @@ void Transport::Worker::Incoming() {
         io_uring_buf_ring_advance(buf_ring, count);
         io_uring_cq_advance(&ring, count);
     }
+}
+
+int Transport::Worker::__process_data(Packet* packet, u32 sz, Address addr) {
+    u32 peer_idx = packet->header.peerIndex;
+    if (peer_idx >= MAX_CLIENTS) return -1; 
+
+    auto session = &rtable->table[peer_idx];
+    if (!session->is_active.load(std::memory_order_consume)) return -1;
+    
+    u8 nonce[12] = {0};
+    u64 bcounter = __builtin_bswap64(packet->header.counter);
+    memcpy(&nonce[4], &bcounter, sizeof(u64));
+
+    u32 idx = pool->Acquire();
+    auto buf = &pool->data[idx];
+
+    int ret;
+    {
+        std::shared_lock<std::shared_mutex> lock(session->mtx);
+
+        ret = crypto_aead_aes256gcm_decrypt_afternm(
+            buf->payload, &buf->len, nullptr,
+            packet->payload, sz - sizeof(Header),
+            nullptr, 0,
+            nonce, &session->crypto_ctx
+        );
+    }
+    if (ret < 0) {
+        std::cout << "Error decrypt an incoming message: code " << ret << std::endl;
+        pool->Release(idx);
+        return -1;
+    }
+
+    // TODO: update address it it has changed
+    
+    return idx;
+}
+
+int Transport::Worker::__process_handshake(Packet* packet, u32 sz, Address addr) {
+    if (sz != 32+sizeof(Header)) return -1;
+
+    int ret = rtable->Handshake(packet->payload, addr);
+    if (ret < 0) return -1;
+
+    printf("The shared secret was computed!\n");
+    fflush(stdout);
+
+    // send the server's private key as a response
+    // u32 out_idx = pool->Acquire();
+    // IncomingBuffer* buf = &pool->data[out_idx];
+    //
+    // buf->idx    = out_idx;
+    // buf->addr   = buf->addr;
+    // buf->len    = crypto_kx_PUBLICKEYBYTES + sizeof(Header);
+    // buf->packet = Packet {
+    //     .header  = Header {
+    //         .packetType = HANDSHAKE,
+    //         .peerIndex  = routingTable.table[sessionIndex].local_addr,
+    //         .counter    = routingTable.table[sessionIndex].add_counter(),
+    //     },
+    //     .payload = {0},
+    // };
+    // memcpy(&buf->packet.payload, publicKey, crypto_kx_PUBLICKEYBYTES);
+
+    // TODO: send the server's public key back to the client
+
+    return -1;
 }
