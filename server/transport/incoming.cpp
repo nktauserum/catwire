@@ -4,6 +4,41 @@
 #include <cstring>
 
 #include <liburing.h>
+#include <sodium.h>
+
+int Transport::Worker::__process_data(Packet* packet, u32 sz) {
+    u32 peer_idx = packet->header.peerIndex;
+    if (peer_idx >= MAX_CLIENTS) return -1; 
+
+    auto session = &rtable->table[peer_idx];
+    if (!session->is_active.load(std::memory_order_consume)) return -1;
+    
+    u8 nonce[12] = {0};
+    u64 bcounter = __builtin_bswap64(packet->header.counter);
+    memcpy(&nonce[4], &bcounter, sizeof(u64));
+
+    u32 idx = pool->Acquire();
+    auto buf = &pool->data[idx];
+
+    int ret;
+    {
+        std::shared_lock<std::shared_mutex> lock(session->mtx);
+        ret = crypto_aead_aes256gcm_decrypt_afternm(
+            buf->payload, &buf->len, nullptr,
+            packet->payload, sz - sizeof(Header),
+            nullptr, 0,
+            nonce, &session->crypto_ctx
+        );
+    }
+    if (ret < 0) {
+        std::cout << "Error decrypt an incoming message: code " << ret << std::endl;
+        pool->Release(idx);
+        return -1;
+    }
+    
+    return idx;
+}
+
 
 void Transport::Worker::Incoming() {
     std::vector<struct io_uring_cqe*> cqes(entries*2);
@@ -32,14 +67,29 @@ void Transport::Worker::Incoming() {
                 if (unlikely(!out)) continue;
                 if (unlikely(out->flags & MSG_TRUNC)) {
                     io_uring_buf_ring_add(buf_ring, BUF_OFFSET(buffers, idx), buffer_size, idx, io_uring_buf_ring_mask(entries), 0);
+                    continue;
                 }
 
                 struct sockaddr_in* addr = reinterpret_cast<struct sockaddr_in*>(io_uring_recvmsg_name(out));
                 
-                void* payload = io_uring_recvmsg_payload(out, &msg);
+                Packet* packet = reinterpret_cast<Packet*>(io_uring_recvmsg_payload(out, &msg));
                 u32 sz = io_uring_recvmsg_payload_length(out, cqe->res, &msg);
+
+                switch (packet->header.packetType) {
+                case DATA: { 
+                   int idx = __process_data(packet, sz);
+                   if (idx < 0) goto cleanup;
+
+                   ch->push(static_cast<u32>(idx));
+                }
+                case HANDSHAKE: {}
+
+                default:
+                    goto cleanup;
+                } 
             }
 
+        cleanup:
             io_uring_buf_ring_add(buf_ring, BUF_OFFSET(buffers, idx), buffer_size, idx, io_uring_buf_ring_mask(entries), 0);
         }
 

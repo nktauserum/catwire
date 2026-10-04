@@ -19,6 +19,7 @@ protected:
 
     RoutingTable* rtable;
     Queue<u32>* queue;
+    Channel<u32>* ch;
 
     enum : u16 {
         READ,

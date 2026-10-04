@@ -20,11 +20,14 @@ public:
 
         SharedPool<OutgoingBuffer>* pool;
 
+        int __process_data(Packet*, u32);
     public:
         void Incoming();
+
         void Outgoing();
-        Worker(int fd, Queue<u32>* queue, SharedPool<OutgoingBuffer>* pool, RoutingTable* rtable);
+
+        Worker(int fd, Queue<u32>*, SharedPool<OutgoingBuffer>*, RoutingTable*, Channel<u32>*);
     };
 
-    Transport(int num_cores, int port, Channel<u32>* ch, SharedPool<OutgoingBuffer>* pool, RoutingTable* rtable); // TODO: move some fields to config
+    Transport(int num_cores, int port, Channel<u32>* inc_ch, Channel<u32>* out_ch, SharedPool<OutgoingBuffer>* pool, RoutingTable* rtable); // TODO: move some fields to config
 };
