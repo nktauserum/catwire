@@ -21,7 +21,7 @@ public:
     std::atomic<u32> waiting;
     Futex futex;
 
-    inline T* acquire() {
+    T* acquire() {
         if (head - tail_cache == QUEUE_SIZE) {
             tail_cache = std::atomic_ref<u32>(tail).load(std::memory_order_consume);
             if (unlikely(head - tail_cache == QUEUE_SIZE)) {
@@ -36,16 +36,20 @@ public:
         std::atomic_ref<u32>(head).fetch_add(1, std::memory_order_release);
     }
 
-    inline T* read() {
-        do {
-            waiting.store(1, std::memory_order_relaxed);
-            futex.wait(&waiting, 1);
-        } while (tail == reinterpret_cast<std::atomic<u32>*>(&head)->load(std::memory_order_acquire)); // TODO: don't fall asleep instantly - spin a little
+    T* read() {
+        if (tail == reinterpret_cast<std::atomic<u32>*>(&head)->load(std::memory_order_acquire)) { // TODO: don't fall asleep instantly - spin a little
+            return nullptr;
+        }
         return &data[tail % QUEUE_SIZE];
     }
 
     inline void pop() {
         std::atomic_ref<u32>(tail).fetch_add(1, std::memory_order_release);
+    }
+
+    void wait() {
+        waiting.store(1, std::memory_order_relaxed);
+        futex.wait(&waiting, 1);
     }
 };
 
