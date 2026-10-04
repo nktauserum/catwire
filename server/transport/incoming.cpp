@@ -129,5 +129,5 @@ int Transport::Worker::__process_handshake(Packet* packet, u32 sz, Address addr)
 
     // TODO: send the server's public key back to the client
 
-    return -1;
+    return -1; // It's neither a placeholder nor an issue. A negative value indicates that we don't need to send anything to the Tunnel
 }
