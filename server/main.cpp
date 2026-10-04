@@ -58,7 +58,7 @@ public:
                 auto out_buf = &outgoingPool.data[out_idx];
                 {
                     std::shared_lock<std::shared_mutex> lock(session->mtx);
-                    if (!session->is_active) {  // drop all packets for an unavailable session
+                    if (!session->is_active.load(std::memory_order_relaxed)) {
                         std::cout << "Error: send packet to the unavailable session: idx " << peer_idx << std::endl;
                         outgoingPool.Release(out_idx);
                         goto cleanup;
@@ -180,8 +180,11 @@ public:
                 u32 dest_ip = reinterpret_cast<struct iphdr*>(buf->payload)->daddr;
                 u32 session_idx = reinterpret_cast<u8*>(&dest_ip)[3]-2;
 
-                std::cout << "Out: receive a packet for session: idx " << session_idx << std::endl;
+
                 auto session = &routingTable.table[session_idx];
+
+                if (!session->is_active.load(std::memory_order_relaxed)) goto cleanup;
+                std::cout << "Out: receive a packet for session: idx " << session_idx << std::endl;
 
                 u64 counter = session->add_counter(); // atomic operation, so keep before the lock
                 u8 nonce[12] = {0};

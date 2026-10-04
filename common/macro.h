@@ -8,7 +8,7 @@
 #define likely(x)    __builtin_expect(!!(x), 1)
 #define unlikely(x)  __builtin_expect(!!(x), 0)
 
-#define panic(s) std::runtime_error(s)
+#define panic(s) throw std::runtime_error("panic: `" s)
 
 #define print_hex(arr, size) do { \
     std::stringstream ss; \

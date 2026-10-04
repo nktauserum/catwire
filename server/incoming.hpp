@@ -1,60 +1,54 @@
 #pragma once
 
-#include <cstring>
-#include <netinet/udp.h>
+#include <thread>
+#include <vector>
+
+#include <sys/socket.h>
+#include <netinet/in.h>
 #include <arpa/inet.h>
 #include <unistd.h>
+#include <error.h>
+#include <sys/mman.h>
 
 #include <liburing.h>
 
-#include "io_uring.h"
 #include "../common/types.h"
-#include "../common/models.h"
+#include "../common/macro.h"
+
+// static const auto num_cores = std::thread::hardware_concurrency();
+
+#define BUF_OFFSET(base, idx) reinterpret_cast<void*>(reinterpret_cast<unsigned char*>(base) + buffer_size*idx)
 
 class Incoming {
-    int fd;
+    std::vector<std::thread> workers;
 
-    static const u32 entries = 256; 
-    static const u64 buffer_size = 65535+sizeof(Header);
+    class Worker {
+        struct io_uring ring;
+        void* buffers;
 
-    u64 counter = 0;
-
-    struct {
+        int fd;
         struct msghdr msg;
-        struct iovec vec;
-    } send_queue[64];
 
-    static inline bool setup_ring(struct io_uring* ring, struct msghdr* msg) {
-        memset(msg, 0, sizeof(struct msghdr));
-        msg->msg_namelen = sizeof(struct sockaddr_storage);
-        msg->msg_controllen = 0;
+        static const int entries = 64;
+        static const int buffer_size = 1500;
 
-        struct io_uring_sqe* sqe = io_uring_get_sqe(ring);
-        if (!sqe) {
-            io_uring_submit(ring);
-            sqe = io_uring_get_sqe(ring);    
-            if (!sqe) {
-                fprintf(stderr, "cannot get sqe\n");
-                return false;
-            }
+        enum : u16 {
+            READ,
+            WRITE,
+        };
 
-        }
+        struct __info {
+            u32 fd;
+            u16 op;
+            u16 bid;
+        };
 
-        io_uring_prep_recvmsg_multishot(sqe, 0, msg, MSG_TRUNC);
+    public:
+        void Start();
+        Worker(int fd);    
+    };
 
-        sqe->flags |= IOSQE_FIXED_FILE;
-        sqe->flags |= IOSQE_BUFFER_SELECT;
-        sqe->buf_group = 0;
-
-        io_uring_sqe_set_data64(sqe, 256 + 1);
-
-        return true;
-    }
-
-    Ring<setup_ring> ring;
-
-public: 
-    bool init(u16 port);
-    void listen(SharedPool<IncomingBuffer>* pool, Channel<u32>* channel);
-    bool send(IncomingBuffer* b);
+public:
+    bool Enqueue(int idx) noexcept;
+    Incoming(int num_cores, int port); 
 };

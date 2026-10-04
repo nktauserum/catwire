@@ -1,107 +1,124 @@
 #include "incoming.hpp"
 
-#include "../common/macro.h"
+Incoming::Incoming(int num_cores, int port) {
+    workers.reserve(num_cores);
 
-bool Incoming::init(u16 port) {
-    fd = socket(AF_INET, SOCK_DGRAM, 0); // only ipv4 is supported
-    if (fd < 0) {
-        fprintf(stderr, "sock_init: %s\n", strerror(errno));
-        return false;
+    struct sockaddr_in addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    addr.sin_port = htons(port);
+
+    int opt = 1;
+
+    for (int i = 0; i < num_cores; ++i) {
+        int fd = socket(AF_INET, SOCK_DGRAM, 0);
+        if (fd < 0) {
+            perror("UDP socket");
+            panic("create UDP socket");
+        }
+
+        if (setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt)) < 0) {
+            perror("SO_REUSEPORT");
+            panic("setsockopt: re-use port");
+        }
+
+        if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
+            perror("SO_REUSEADDR");
+            panic("setsockopt: re-use addr");
+        }
+
+        if (bind(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+            perror("bind");
+            panic("bind");
+        }
+
+        Worker w(fd);
+        workers[i] = std::thread([&w](){
+            w.Start();
+        });
+    }
+}
+
+Incoming::Worker::Worker(int fd) : fd{fd} {
+    memset(&ring, 0, sizeof(ring));
+
+    struct io_uring_params params;
+    memset(&params, 0, sizeof(params));
+
+    params.cq_entries = entries * 2;
+    params.flags = IORING_SETUP_SUBMIT_ALL | IORING_SETUP_COOP_TASKRUN | IORING_SETUP_CQSIZE;
+
+    int ret = io_uring_queue_init_params(entries, &ring, &params);
+    if (ret < 0) {
+        fprintf(stderr, "queue_init failed: %s\n", strerror(-ret));
+        panic("queue_init failed");
     }
 
-    struct sockaddr_in addr = {
-        .sin_family = AF_INET,
-        .sin_port = htons(port),
-        .sin_addr = { INADDR_ANY },
-        .sin_zero = {0}
-    };
+    size_t map_size = sizeof(struct io_uring_buf) * entries;
+    void* mapped = mmap(NULL, map_size, PROT_READ | PROT_WRITE,
+          MAP_ANONYMOUS | MAP_PRIVATE, 0, 0);
+    if (mapped == MAP_FAILED) {
+        fprintf(stderr, "buf_ring mmap: %s\n", strerror(errno));
+        panic("mmap failed");
+    }
 
-    int ret = bind(fd, (struct sockaddr *) &addr, sizeof(addr));
+    struct io_uring_buf_ring* buf_ring = reinterpret_cast<struct io_uring_buf_ring*>(mapped);
+    io_uring_buf_ring_init(buf_ring);
+
+    buffers = mmap(NULL, entries*buffer_size, PROT_READ | PROT_WRITE,
+          MAP_ANONYMOUS | MAP_PRIVATE, 0, 0);
+    if (mapped == MAP_FAILED) {
+        fprintf(stderr, "buf_ring mmap: %s\n", strerror(errno));
+        panic("mmap failed");
+    }
+
+    struct io_uring_buf_reg reg;
+    memset(&reg, 0, sizeof(reg));
+    reg.ring_addr = reinterpret_cast<u64>(mapped);
+    reg.ring_entries = entries;
+
+    ret = io_uring_register_buf_ring(&ring, &reg, 0);
     if (ret) {
-        fprintf(stderr, "sock_bind: %s\n", strerror(errno));
-        close(fd);
-        return false;
+        fprintf(stderr, "buf_ring init failed: %s\n"
+                "NB This requires a kernel version >= 6.0\n",
+                strerror(-ret));
+        panic("register_buf_ring");
     }
 
-    if (!ring.init(entries, buffer_size)) return false;
-
-    return ring.register_fd(fd);
-}
-
-void Incoming::listen(SharedPool<IncomingBuffer>* pool, Channel<u32>* channel) {
-    struct io_uring_cqe* *cqes = reinterpret_cast<struct io_uring_cqe**>(calloc(entries*2, sizeof(struct io_uring_cqe*))); // possibly null, idc
-                                                                                                                         
-    while (true) {
-        int ret = ring.wait();
-        if (unlikely(ret == -EINTR))
-            continue;
-        if (unlikely(ret < 0)) {
-            fprintf(stderr, "submit and wait failed %d\n", ret);
-            break;
-        }
-
-        int count = ring.batch(cqes, entries*2);
-        for (int i = 0; i < count; ++i) {
-            if (unlikely(!ring.packet_check(cqes[i]))) continue;
-            if (cqes[i]->res < 0) continue;
-
-            if (cqes[i]->user_data > entries) {
-                struct io_uring_recvmsg_out *msg = ring.packet_process(cqes[i]);
-                if (unlikely(!msg))
-                    continue;
-
-                struct sockaddr_in *addr = ring.packet_address(msg);
-
-                u32 idx = pool->Acquire();
-                IncomingBuffer* buf = &pool->data[idx];
-
-                u32 sz = ring.packet_size(msg, cqes[i]->res);
-                memcpy(&buf->packet, ring.packet_payload(msg), sz);
-                buf->addr = *addr;
-                buf->idx = counter++;
-                buf->len = sz - sizeof(Header);
-
-                channel->push(idx);
-
-                printf("Incoming packet: size %d\n", sz);
-                fflush(stdout);
-            } else {
-                pool->Release(cqes[i]->user_data);
-            }
-
-            ring.packet_recycle(cqes[i]);
-        }
-
-        ring.advance_queue(count);
+    for (u32 i = 0; i < entries; i++) {
+        io_uring_buf_ring_add(buf_ring, BUF_OFFSET(buffers, i), buffer_size, i,
+                      io_uring_buf_ring_mask(entries), i);
     }
-}
+    io_uring_buf_ring_advance(buf_ring, entries);
 
-bool Incoming::send(IncomingBuffer* b) {
-    struct io_uring_sqe* sqe = ring.sqe();
-    if (!sqe) return false;
+    ret = io_uring_register_files(&ring, &fd, 1);
+    if (ret) {
+        fprintf(stderr, "register files: %s\n", strerror(-ret));
+        panic("register fd");
+    }
 
-    auto buf = &send_queue[b->idx];
-    buf->vec = (struct iovec) {
-        .iov_base = reinterpret_cast<void*>(&b->packet),
-        .iov_len  = b->len,
+    memset(&msg, 0, sizeof(msg));
+    msg.msg_namelen = sizeof(struct sockaddr_storage);
+    msg.msg_controllen = 0;
+
+    struct io_uring_sqe* sqe = io_uring_get_sqe(&ring);
+    if (!sqe) {
+        panic("cannot get sqe");
+    }
+
+    io_uring_prep_recvmsg_multishot(sqe, 0, &msg, MSG_TRUNC);
+
+    sqe->flags |= IOSQE_FIXED_FILE;
+    sqe->flags |= IOSQE_BUFFER_SELECT;
+    sqe->buf_group = 0;
+
+    u64 inf = 0;
+    __info info = {
+        .fd  = static_cast<u32>(fd),
+        .op  = READ,
+        .bid = reg.bgid
     };
-
-    buf->msg = (struct msghdr) { 
-        .msg_name       = &b->addr,
-        .msg_namelen    = sizeof(Address),
-        .msg_iov        = &buf->vec,
-        .msg_iovlen     = 1,
-        .msg_control    = nullptr,
-        .msg_controllen = 0,
-        .msg_flags      = 0,
-    };
-
-    io_uring_prep_sendmsg(sqe, fd, &buf->msg, 0);
-    io_uring_sqe_set_data64(sqe, b->idx);
-
-    ring.submit();
-
-    return true;
-
+    memcpy(&inf, &info, sizeof(__info));
+    io_uring_sqe_set_data64(sqe, inf);
 }
-

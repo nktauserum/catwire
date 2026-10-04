@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <cstdio>
+#include <iostream>
 #include <liburing.h>
 #include <sys/mman.h>
 
@@ -116,6 +117,7 @@ public:
 
     bool packet_check(struct io_uring_cqe* cqe) {
         if (unlikely(!(cqe->flags & IORING_CQE_F_MORE))) {
+            std::cout << "res: " << cqe->res << std::endl;
             func(&ring, &msg); 
             return false;
         }
