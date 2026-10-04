@@ -11,6 +11,7 @@
 class Transport {
     std::vector<std::thread> workers;
 
+public:
     class Worker final : public Interface {
         struct msghdr msg;
 
@@ -18,9 +19,10 @@ class Transport {
         static const int buffer_size = 1500;
 
     public:
+        void Incoming();
+        void Outgoing();
         Worker(int fd, Queue<u32>* queue);
     };
 
-public:
     Transport(int num_cores, int port, Channel<u32>* ch); 
 };

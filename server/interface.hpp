@@ -12,6 +12,7 @@ protected:
     int fd;
 
     struct io_uring ring;
+    struct io_uring_buf_ring* buf_ring;
     void* buffers;
 
     Queue<u32>* queue;

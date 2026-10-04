@@ -78,7 +78,7 @@ Transport::Worker::Worker(int fd, Queue<u32>* queue) {
         panic("mmap failed");
     }
 
-    struct io_uring_buf_ring* buf_ring = reinterpret_cast<struct io_uring_buf_ring*>(mapped);
+    buf_ring = reinterpret_cast<struct io_uring_buf_ring*>(mapped);
     io_uring_buf_ring_init(buf_ring);
 
     buffers = mmap(NULL, entries*buffer_size, PROT_READ | PROT_WRITE,
