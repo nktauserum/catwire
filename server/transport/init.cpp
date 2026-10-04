@@ -1,7 +1,16 @@
-#include "incoming.hpp"
+#include "../transport.hpp"
 
-Incoming::Incoming(int num_cores, int port) {
-    workers.reserve(num_cores);
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+#include <error.h>
+#include <sys/mman.h>
+
+#include "../../common/macro.h"
+
+Transport::Transport(int num_cores, int port, Channel<u32>* ch) {
+    workers.reserve(num_cores*2);
 
     struct sockaddr_in addr;
     memset(&addr, 0, sizeof(addr));
@@ -11,7 +20,7 @@ Incoming::Incoming(int num_cores, int port) {
 
     int opt = 1;
 
-    for (int i = 0; i < num_cores; ++i) {
+    for (int i = 0; i < num_cores*2; ++i) {
         int fd = socket(AF_INET, SOCK_DGRAM, 0);
         if (fd < 0) {
             perror("UDP socket");
@@ -33,14 +42,20 @@ Incoming::Incoming(int num_cores, int port) {
             panic("bind");
         }
 
-        Worker w(fd);
+        Worker w(fd, ch->add_worker());
         workers[i] = std::thread([&w](){
-            w.Start();
+            w.Incoming();
+        });
+        workers[++i] = std::thread([&w](){
+            w.Outgoing();
         });
     }
 }
 
-Incoming::Worker::Worker(int fd) : fd{fd} {
+Transport::Worker::Worker(int fd, Queue<u32>* queue) {
+    this->fd = fd;
+    this->queue = queue;
+
     memset(&ring, 0, sizeof(ring));
 
     struct io_uring_params params;
