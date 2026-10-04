@@ -5,6 +5,8 @@
 #include "../common/types.h"
 #include "../common/models.h"
 
+#include "routing.hpp"
+
 #define BUF_OFFSET(base, idx) reinterpret_cast<void*>(reinterpret_cast<unsigned char*>(base) + buffer_size*idx)
 
 class Interface {
@@ -15,6 +17,7 @@ protected:
     struct io_uring_buf_ring* buf_ring;
     void* buffers;
 
+    RoutingTable* rtable;
     Queue<u32>* queue;
 
     enum : u16 {

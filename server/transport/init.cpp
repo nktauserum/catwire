@@ -9,7 +9,7 @@
 
 #include "../../common/macro.h"
 
-Transport::Transport(int num_cores, int port, Channel<u32>* ch) {
+Transport::Transport(int num_cores, int port, Channel<u32>* ch, SharedPool<OutgoingBuffer>* pool, RoutingTable* rtable) {
     workers.reserve(num_cores*2);
 
     struct sockaddr_in addr;
@@ -42,7 +42,7 @@ Transport::Transport(int num_cores, int port, Channel<u32>* ch) {
             panic("bind");
         }
 
-        Worker w(fd, ch->add_worker());
+        Worker w(fd, ch->add_worker(), pool, rtable);
         workers[i] = std::thread([&w](){
             w.Incoming();
         });
@@ -52,9 +52,11 @@ Transport::Transport(int num_cores, int port, Channel<u32>* ch) {
     }
 }
 
-Transport::Worker::Worker(int fd, Queue<u32>* queue) {
+Transport::Worker::Worker(int fd, Queue<u32>* queue, SharedPool<OutgoingBuffer>* pool, RoutingTable* rtable) {
     this->fd = fd;
     this->queue = queue;
+    this->pool = pool;
+    this->rtable = rtable;
 
     memset(&ring, 0, sizeof(ring));
 
