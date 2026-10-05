@@ -18,8 +18,8 @@ public:
     class Worker final : public Interface {
         static const int entries = 64;
         static const int buffer_size = 1500;
-        SharedPool<OutgoingBuffer>* pool;
-        SharedPool<IncomingBuffer>* incoming_pool; // TODO: provide
+        SharedPool<IncomingBuffer>* pool;
+        SharedPool<OutgoingBuffer>* incoming_pool; // TODO: provide
     public: 
         void Incoming();
         void Outgoing();

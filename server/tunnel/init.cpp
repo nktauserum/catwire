@@ -44,6 +44,12 @@ Tunnel::Tunnel(Context ctx, Config config) {
 }
 
 Tunnel::Worker::Worker(Context ctx, int fd, Queue<u32>* queue) {
+    this->fd = fd;
+    this->queue = queue;
+    this->ch = ctx.outgoing_channel;
+    this->pool = ctx.incoming_pool;
+    this->incoming_pool = ctx.outgoing_pool;
+
     memset(&ring, 0, sizeof(ring));
 
     struct io_uring_params params;
