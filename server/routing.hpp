@@ -90,7 +90,7 @@ public:
 
         session->is_active.store(1, std::memory_order_release);
         
-        return 0;
+        return sessionIndex;
     } 
 
     RoutingTable(u8* seed, std::vector<Client>& clients) {

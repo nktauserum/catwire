@@ -104,30 +104,30 @@ int Transport::Worker::__process_data(Packet* packet, u32 sz, Address addr) {
 int Transport::Worker::__process_handshake(Packet* packet, u32 sz, Address addr) {
     if (sz != 32+sizeof(Header)) return -1;
 
-    int ret = rtable->Handshake(packet->payload, addr);
-    if (ret < 0) return -1;
+    int sessionIndex = rtable->Handshake(packet->payload, addr);
+    if (sessionIndex < 0) return -1;
 
     printf("The shared secret was computed!\n");
     fflush(stdout);
 
     // send the server's private key as a response
-    // u32 out_idx = pool->Acquire();
-    // IncomingBuffer* buf = &pool->data[out_idx];
-    //
-    // buf->idx    = out_idx;
-    // buf->addr   = buf->addr;
-    // buf->len    = crypto_kx_PUBLICKEYBYTES + sizeof(Header);
-    // buf->packet = Packet {
-    //     .header  = Header {
-    //         .packetType = HANDSHAKE,
-    //         .peerIndex  = routingTable.table[sessionIndex].local_addr,
-    //         .counter    = routingTable.table[sessionIndex].add_counter(),
-    //     },
-    //     .payload = {0},
-    // };
-    // memcpy(&buf->packet.payload, publicKey, crypto_kx_PUBLICKEYBYTES);
+    u32 out_idx = incoming_pool->Acquire();
+    IncomingBuffer* buf = &incoming_pool->data[out_idx];
 
-    // TODO: send the server's public key back to the client
+    buf->idx    = out_idx;
+    buf->addr   = buf->addr;
+    buf->len    = crypto_kx_PUBLICKEYBYTES;
+    buf->packet = Packet {
+        .header  = Header {
+            .packetType = HANDSHAKE,
+            .peerIndex  = rtable->table[sessionIndex].local_addr,
+            .counter    = rtable->table[sessionIndex].add_counter(),
+        },
+        .payload = {0},
+    };
+    memcpy(&buf->packet.payload, rtable->publicKey, crypto_kx_PUBLICKEYBYTES);
+
+    __enqueue(out_idx);
 
     return -1; // It's neither a placeholder nor an issue. A negative value indicates that we don't need to send anything to the Tunnel
 }
