@@ -1,5 +1,8 @@
+#pragma once
+
 #include <fstream>
 #include <string.h>
+#include <thread>
 #include <vector>
 #include <algorithm>
 #include <arpa/inet.h>
@@ -24,10 +27,10 @@ static std::pair<std::string, std::string> parse_field(const char* field) {
         if (field[i] == '=') return std::pair<std::string, std::string>(s.assign(field, i), std::string(&field[i+1]));
     }
 
-    throw panic("bad field");
+    panic("bad field");
 }
 
-bool compareClientsByAddr(const Client& a, const Client& b) {
+static bool compareClientsByAddr(const Client& a, const Client& b) {
     return ntohl(a.local_addr) < ntohl(b.local_addr);
 }
 
@@ -37,6 +40,7 @@ bool compareClientsByAddr(const Client& a, const Client& b) {
 struct Config {
     u8 seed[32] = {0};
     u16 port;
+    u32 num_cores = std::thread::hardware_concurrency();
 
     std::vector<Client> clients;
 
@@ -66,7 +70,7 @@ struct Config {
 
             switch (state) {
                 case BEGIN:
-                    throw panic("panic: config should start with [main]");
+                    panic("panic: config should start with [main]");
 
                 case EXPECT_MAIN_FIELD:
                     if (val.first == "seed") { 
@@ -86,7 +90,7 @@ struct Config {
 
                     } else if (val.first == "address") {
                         auto addr = handle_string(val.second);
-                        if (inet_pton(AF_INET, addr.c_str(), &current_client.local_addr) < 0) throw panic("error parsing client address"); // big endian
+                        if (inet_pton(AF_INET, addr.c_str(), &current_client.local_addr) < 0) panic("error parsing client address"); // big endian
                     } else continue;
 
                     break;
