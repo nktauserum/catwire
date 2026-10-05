@@ -9,18 +9,18 @@
 
 #include "../../common/macro.h"
 
-Transport::Transport(int num_cores, int port, Channel<u32>* ch,  Channel<u32>* out_ch, SharedPool<OutgoingBuffer>* pool, RoutingTable* rtable) {
-    workers.reserve(num_cores*2);
+Transport::Transport(Context ctx, Config config) {
+    workers.reserve(config.num_cores*2);
 
     struct sockaddr_in addr;
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    addr.sin_port = htons(port);
+    addr.sin_port = htons(config.port);
 
     int opt = 1;
 
-    for (int i = 0; i < num_cores*2; ++i) {
+    for (int i = 0; i < config.num_cores*2; ++i) {
         int fd = socket(AF_INET, SOCK_DGRAM, 0);
         if (fd < 0) {
             perror("UDP socket");
@@ -42,7 +42,7 @@ Transport::Transport(int num_cores, int port, Channel<u32>* ch,  Channel<u32>* o
             panic("bind");
         }
 
-        Worker w(fd, ch->add_worker(), pool, rtable, out_ch);
+        Worker w(ctx, fd, ctx.incoming_channel->add_worker());
         workers[i] = std::thread([&w](){
             w.Incoming();
         });
@@ -52,12 +52,12 @@ Transport::Transport(int num_cores, int port, Channel<u32>* ch,  Channel<u32>* o
     }
 }
 
-Transport::Worker::Worker(int fd, Queue<u32>* queue, SharedPool<OutgoingBuffer>* pool, RoutingTable* rtable,  Channel<u32>* out_ch) {
-    this->fd = fd;
-    this->queue = queue;
-    this->pool = pool;
-    this->rtable = rtable;
-    this->ch = out_ch;
+Transport::Worker::Worker(Context ctx, int fd, Queue<u32>* queue) {
+    this->fd     = fd;
+    this->queue  = queue;
+    this->pool   = ctx.outgoing_pool;
+    this->rtable = ctx.rtable;
+    this->ch     = ctx.outgoing_channel;
 
     memset(&ring, 0, sizeof(ring));
 

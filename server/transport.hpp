@@ -7,6 +7,8 @@
 
 #include "interface.hpp"
 #include "../common/models.h"
+#include "context.hpp"
+#include "config.hpp"
 
 class Transport {
     std::vector<std::thread> workers;
@@ -35,8 +37,8 @@ public:
         void Incoming();
         void Outgoing();
 
-        Worker(int fd, Queue<u32>*, SharedPool<OutgoingBuffer>*, RoutingTable*, Channel<u32>*);
+        Worker(Context, int, Queue<u32>*);
     };
 
-    Transport(int num_cores, int port, Channel<u32>* inc_ch, Channel<u32>* out_ch, SharedPool<OutgoingBuffer>* pool, RoutingTable* rtable); // TODO: move some fields to config
+    Transport(Context, Config); // TODO: move some fields to config
 };
