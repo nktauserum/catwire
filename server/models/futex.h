@@ -9,7 +9,7 @@
 #include <unistd.h>
 #include <atomic>
 
-#include "../types.h"
+#include "../../common/types.h"
 
 struct Futex {
 private:

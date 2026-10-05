@@ -4,8 +4,8 @@
 #include <thread>
 #include <atomic>
 
-#include "../types.h"
-#include "../macro.h"
+#include "../../common/types.h"
+#include "../../common/macro.h"
 
 template <typename T>
 class SharedPool {

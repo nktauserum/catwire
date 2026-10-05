@@ -11,6 +11,7 @@
 
 #include "../common/types.h"
 #include "../common/models.h"
+#include "models/client.h"
 
 #define MAX_CLIENTS 256
 

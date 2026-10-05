@@ -4,8 +4,8 @@
 #include <atomic>
 
 #include "queue.h"
-#include "../types.h"
-#include "../macro.h"
+#include "../../common/types.h"
+#include "../../common/macro.h"
 
 template <typename T>
 struct Channel {
@@ -44,7 +44,7 @@ public:
 
     Channel(int size) : size{size} {
         workers = reinterpret_cast<Queue<T>*>(calloc(size, sizeof(Queue<T>)));
-        if (!workers) throw panic("buy more ram lol");
+        if (!workers) panic("buy more ram lol");
     }
 };
 

@@ -1,7 +1,12 @@
 #pragma once
 
-#include "../common/models.h"
-#include "routing.hpp"
+#include "../../common/types.h"
+#include "../../common/models.h"
+
+#include "../models/channel.h"
+#include "../models/pool.h"
+
+#include "../routing.hpp"
 
 struct Context {
     Channel<u32>               *incoming_channel, *outgoing_channel;

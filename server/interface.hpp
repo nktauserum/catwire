@@ -5,6 +5,9 @@
 #include "../common/types.h"
 #include "../common/models.h"
 
+#include "models/queue.h"
+#include "models/channel.h"
+
 #include "routing.hpp"
 
 #define BUF_OFFSET(base, idx) reinterpret_cast<void*>(reinterpret_cast<unsigned char*>(base) + buffer_size*idx)
