@@ -23,8 +23,13 @@ public:
 
         int __process_data(Packet*, u32, Address);
         int __process_handshake(Packet*, u32, Address);
+        
+        typedef struct {
+            struct msghdr msg;
+            struct iovec vec;
+        } send_msg;
 
-        std::vector<struct io_uring_sqe*> send_queue;
+        std::vector<send_msg> send_queue;
         void __enqueue(u32);
     public:
         void Incoming();
