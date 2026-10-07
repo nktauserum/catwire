@@ -6,26 +6,6 @@
 
 constexpr auto max_interval = std::chrono::nanoseconds(200);
 
-// void Transport::Worker::Outgoing() {
-//     auto last_msg = std::chrono::steady_clock::now();
-//
-//     while (true) {
-//         auto now = std::chrono::steady_clock::now();
-//         u32* idx = queue->read();
-//         if (idx) {
-//             queue->pop();
-//             __enqueue(*idx);
-//             last_msg = now;
-//             continue;
-//         }
-//
-//
-//         if (now - last_msg >= max_interval) {
-//             queue->wait();
-//         }
-//     }
-// }
-
 int Transport::Worker::enqueue(u32 idx) {
     IncomingBuffer* b = &incoming_pool->data[idx];
     struct io_uring_sqe* sqe = io_uring_get_sqe(&ring); 
