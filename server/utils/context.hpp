@@ -3,18 +3,19 @@
 #include "../../common/models.h"
 
 #include "../models/pool.h"
+#include "../models/buffer.h"
 #include "config.hpp"
 
 #include "../routing.hpp"
 
 struct Context {
-    SharedPool<IncomingBuffer>* incoming_pool;
-    SharedPool<OutgoingBuffer>* outgoing_pool;
-    RoutingTable*               rtable;
+    SharedPool<TransportBuffer>* transport_pool;
+    SharedPool<TunnelBuffer>*    tunnel_pool;
+    RoutingTable*                rtable;
 
     Context(Config config) :
-        incoming_pool{new SharedPool<IncomingBuffer>()},
-        outgoing_pool{new SharedPool<OutgoingBuffer>()},
-        rtable{new RoutingTable(config.seed, config.clients)}
+        transport_pool{new SharedPool<TransportBuffer>()},
+        tunnel_pool   {new SharedPool<TunnelBuffer>()},
+        rtable        {new RoutingTable(config.seed, config.clients)}
     {}
 };

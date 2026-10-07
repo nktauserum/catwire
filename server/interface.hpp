@@ -7,7 +7,7 @@
 #include "../common/types.h"
 #include "../common/models.h"
 
-#include "models/queue.h"
+#include "models/buffer.h"
 #include "models/pool.h"
 #include "utils/context.hpp"
 #include "utils/config.hpp"
@@ -52,8 +52,8 @@ class Transport {
         static const int entries = 64;
         static const int buffer_size = 1500;
 
-        SharedPool<OutgoingBuffer>* pool;
-        SharedPool<IncomingBuffer>* incoming_pool;
+        SharedPool<TransportBuffer>* transport_pool;
+        SharedPool<TunnelBuffer>*    tunnel_pool;
 
         Tunnel* send;
 
@@ -89,8 +89,8 @@ class Tunnel {
 
         Transport* send;
 
-        SharedPool<IncomingBuffer>* pool;
-        SharedPool<OutgoingBuffer>* incoming_pool; // TODO: provide
+        SharedPool<TransportBuffer>* transport_pool;
+        SharedPool<TunnelBuffer>*    tunnel_pool;
     public: 
         void incoming();
         int enqueue(u32);

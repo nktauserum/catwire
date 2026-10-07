@@ -80,8 +80,8 @@ int Transport::Worker::__process_data(Packet* packet, u32 sz, Address addr) {
     u64 bcounter = __builtin_bswap64(packet->header.counter);
     memcpy(&nonce[4], &bcounter, sizeof(u64));
 
-    u32 idx = pool->Acquire();
-    auto buf = &pool->data[idx];
+    u32 idx = tunnel_pool->Acquire();
+    TunnelBuffer* buf = &tunnel_pool->data[idx];
 
     int ret;
     {
@@ -96,7 +96,7 @@ int Transport::Worker::__process_data(Packet* packet, u32 sz, Address addr) {
     }
     if (ret < 0) {
         std::cout << "Error decrypt an incoming message: code " << ret << std::endl;
-        pool->Release(idx);
+        tunnel_pool->Release(idx);
         return -1;
     }
 
@@ -115,8 +115,8 @@ int Transport::Worker::__process_handshake(Packet* packet, u32 sz, Address addr)
     fflush(stdout);
 
     // send the server's private key as a response
-    u32 out_idx = incoming_pool->Acquire();
-    IncomingBuffer* buf = &incoming_pool->data[out_idx];
+    u32 out_idx = transport_pool->Acquire();
+    TransportBuffer* buf = &transport_pool->data[out_idx];
 
     buf->idx    = out_idx;
     buf->addr   = buf->addr;

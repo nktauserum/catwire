@@ -1,7 +1,7 @@
 #include "../interface.hpp"
 
 int Tunnel::Worker::enqueue(u32 idx) {
-    auto data = &incoming_pool->data[idx];
+    auto data = &tunnel_pool->data[idx];
     struct io_uring_sqe* sqe = io_uring_get_sqe(&ring); 
     if (!sqe) return -1;
    

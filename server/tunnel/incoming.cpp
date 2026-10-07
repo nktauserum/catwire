@@ -45,8 +45,8 @@ void Tunnel::Worker::incoming() {
                     u64 bcounter = __builtin_bswap64(counter);
                     memcpy(&nonce[4], &bcounter, sizeof(u64));
                     
-                    u32 out_idx = pool->Acquire();
-                    IncomingBuffer* out_buf = &pool->data[out_idx];
+                    u32 out_idx = transport_pool->Acquire();
+                    TransportBuffer* out_buf = &transport_pool->data[out_idx];
 
                     {
                         std::shared_lock<std::shared_mutex> lock(session->mtx);
@@ -59,7 +59,7 @@ void Tunnel::Worker::incoming() {
                         );
                         if (res < 0) {
                             std::cout << "Error encrypt outgoing packet: ret " << res << std::endl;
-                            pool->Release(out_idx);
+                            transport_pool->Release(out_idx);
                             goto cleanup;
                         }
                         out_buf->addr = session->remote_addr;

@@ -47,8 +47,8 @@ void Tunnel::Init(Context ctx, Config config, Transport* interface) {
 
 Tunnel::Worker::Worker(Context ctx, int fd, Transport* interface) {
     this->fd = fd;
-    this->pool = ctx.incoming_pool;
-    this->incoming_pool = ctx.outgoing_pool;
+    this->tunnel_pool = ctx.tunnel_pool;
+    this->transport_pool = ctx.transport_pool;
     this->send = interface;
     this->rtable = ctx.rtable;
 

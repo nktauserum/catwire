@@ -4,7 +4,7 @@
 #include <liburing.h>
 
 int Transport::Worker::enqueue(u32 idx) {
-    IncomingBuffer* b = &incoming_pool->data[idx];
+    TransportBuffer* b = &transport_pool->data[idx];
     struct io_uring_sqe* sqe = io_uring_get_sqe(&ring); 
     if (!sqe) return -1;
 
