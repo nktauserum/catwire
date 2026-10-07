@@ -107,4 +107,5 @@ class Tunnel {
 public:
     int Enqueue(u32);
     void Init(Context, Config, Transport*);
+    void Join();
 };

@@ -127,3 +127,7 @@ Tunnel::Worker::Worker(Context ctx, int fd, Queue<u32>* queue, Transport* interf
 
     io_uring_submit(&ring);
 }
+
+void Tunnel::Join() {
+    threads[0].join();
+}

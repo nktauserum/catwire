@@ -229,5 +229,7 @@ int main(void) {
     tun.Init(ctx, config, &udp);
     udp.Init(ctx, config, &tun);
 
+    tun.Join();
+
     return 0;
 }
