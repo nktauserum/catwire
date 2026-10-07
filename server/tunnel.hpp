@@ -29,6 +29,4 @@ public:
 
     int Enqueue(u32);
     void Init(Context, Config, Interface*);
-
-    Tunnel();
 };
