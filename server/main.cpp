@@ -7,11 +7,17 @@
 #include "interface.hpp"
 
 int main(void) {
-    if (sodium_init() < 0) 
-        panic("failed to initialize libsodium");
+    std::cout << "[INFO]: Starting..." << std::endl;
 
-    if (!crypto_aead_aes256gcm_is_available()) 
-        panic("AES256-GCM is not supported by your hardware (CPU)");
+    if (sodium_init() < 0) {
+        std::cout << "[ERROR]: Failed to initialize libsodium" << std::endl;
+        return 1;
+    }
+
+    if (!crypto_aead_aes256gcm_is_available()) { 
+        std::cout << "[ERROR]: AES256-GCM is not supported by your hardware (CPU)" << std::endl;
+        return 1;
+    }
 
     Config config("config.ini");
 
@@ -22,8 +28,6 @@ int main(void) {
 
     tun.Init(ctx, config, &udp);
     udp.Init(ctx, config, &tun);
-
-    std::cout << "[INFO]: Starting on port " << config.port << std::endl;
 
     tun.Join();
 

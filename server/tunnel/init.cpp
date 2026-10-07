@@ -1,5 +1,6 @@
 #include "../interface.hpp"
 
+#include <iostream>
 #include <fcntl.h>
 #include <linux/if.h>
 #include <linux/if_tun.h>
@@ -40,6 +41,8 @@ void Tunnel::Init(Context ctx, Config config, Transport* interface) {
             w->incoming();
         });
     }
+
+    std::cout << "[INFO]: Listening on TUN (" << config.num_cores << " threads/fds)" << std::endl;
 }
 
 Tunnel::Worker::Worker(Context ctx, int fd, Queue<u32>* queue, Transport* interface) {

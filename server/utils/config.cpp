@@ -88,5 +88,7 @@ Config::Config(const char* filename) {
     clients.push_back(current_client);
 
     std::sort(clients.begin(), clients.end(), compareClientsByAddr);
+
+    std::cout << "[INFO]: Parse " << filename << ": " << clients.size() << " client(s)" << std::endl;
 }
 

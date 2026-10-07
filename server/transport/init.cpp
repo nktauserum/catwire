@@ -1,5 +1,6 @@
 #include "../interface.hpp"
 
+#include <iostream>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -49,6 +50,8 @@ void Transport::Init(Context ctx, Config config, Tunnel* interface) {
             w->incoming();
         });
     }
+
+    std::cout << "[INFO]: Listening on UDP 0.0.0.0:" << config.port << " (" << config.num_cores << " threads/fds)" << std::endl;
 }
 
 Transport::Worker::Worker(Context ctx, int fd, Queue<u32>* queue, Tunnel* interface) {
