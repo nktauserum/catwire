@@ -44,11 +44,11 @@ void Transport::Init(Context ctx, Config config, Tunnel* interface) {
             panic("bind");
         }
 
-        workers[i] = Worker(ctx, fd, ctx.incoming_channel->add_worker(), interface);
-        Worker* w = &workers[i];
-        threads[i] = std::thread([w](){
+        workers.push_back(Worker(ctx, fd, ctx.incoming_channel->add_worker(), interface));
+        auto w = &workers[i];
+        threads.push_back(std::thread([w](){
             w->incoming();
-        });
+        }));
     }
 
     std::cout << "[INFO]: Listening on UDP 0.0.0.0:" << config.port << " (" << config.num_cores << " threads/fds)" << std::endl;
