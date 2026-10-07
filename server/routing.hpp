@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <vector>
+#include <array>
 #include <atomic>
 #include <mutex>
 #include <shared_mutex>
@@ -16,14 +17,15 @@
 #define MAX_CLIENTS 256
 
 struct Session {
-    std::shared_mutex mtx;
     std::atomic<bool> is_active = false;
+    u64 counter = 0;
+
+    std::shared_mutex mtx;
 
     u8 shared_key[32] = {0};
     u8 publicKey[32] = {0};
 
     crypto_aead_aes256gcm_state crypto_ctx;
-    u64 counter = 0;
 
     u32 local_addr = 0;
     Address remote_addr;
@@ -36,21 +38,26 @@ struct Session {
 class RoutingTable {
 private:
     u8 privateKey[32];
-
 public:
-    Session table[MAX_CLIENTS];
-    int available[MAX_CLIENTS] = {0};
-    int size = 0;
+    std::array<Session, MAX_CLIENTS> table;
+    std::array<int, MAX_CLIENTS> lookup;
+    int num_clients = 0;
 
     u8 publicKey[32];
 
     int exists(u8* publicKey) {
-        for (int i = 0; i < size; ++i) {
-            int idx = available[i];
-            if(memcmp(table[idx].publicKey, publicKey, 32) == 0) return idx;
+        for (int i = 0; i < num_clients; ++i) {
+            if(memcmp(table[i].publicKey, publicKey, 32) == 0) return i;
         }
 
         return -1;
+    }
+
+    int active(u32 idx) {
+        int session_index = lookup[idx];
+        if (session_index < 0) return -1;
+
+        return table[session_index].is_active.load(std::memory_order_acquire) ? session_index : -1;
     }
 
     int Handshake(u8* client_pubkey, Address addr) {
@@ -100,15 +107,19 @@ public:
         if (clients.size() > MAX_CLIENTS)
             panic("config: too many clients. Check MAX_CLIENTS constant.");
 
-        for (size = 0; size < clients.size(); ++size) {
-            auto& client = clients[size];
+        lookup.fill(-1);
+
+        for (num_clients = 0; num_clients < clients.size(); ++num_clients) {
+            auto& client = clients[num_clients];
+            Session& session = table[num_clients];
+
             int idx = ((client.local_addr >> 24) & 0xFF) - 2;
             if (idx < 0) panic("config: addresses ...0 and ...1 are reserved. Check client addresses.");
             
-            memcpy(table[idx].publicKey, client.publicKey, 32);
-            table[idx].local_addr = client.local_addr;
-
-            available[size] = idx;
+            memcpy(session.publicKey, client.publicKey, 32);
+            session.local_addr = client.local_addr;
+            
+            lookup[idx] = num_clients;
         }
 
         if (crypto_kx_seed_keypair(publicKey, privateKey, seed) != 0) {

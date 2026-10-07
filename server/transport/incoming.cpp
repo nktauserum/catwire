@@ -56,7 +56,8 @@ void Transport::Worker::incoming() {
                 }
 
                 if (idx < 0) goto cleanup;
-                ch->push(static_cast<u32>(idx));
+
+                send->Enqueue(idx);
             }
 
         cleanup:
@@ -73,7 +74,7 @@ int Transport::Worker::__process_data(Packet* packet, u32 sz, Address addr) {
     if (peer_idx >= MAX_CLIENTS) return -1; 
 
     auto session = &rtable->table[peer_idx];
-    if (!session->is_active.load(std::memory_order_consume)) return -1;
+    if (!session->is_active.load(std::memory_order_acquire)) return -1;
     
     u8 nonce[12] = {0};
     u64 bcounter = __builtin_bswap64(packet->header.counter);

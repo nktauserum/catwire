@@ -52,6 +52,7 @@ Tunnel::Worker::Worker(Context ctx, int fd, Queue<u32>* queue, Transport* interf
     this->pool = ctx.incoming_pool;
     this->incoming_pool = ctx.outgoing_pool;
     this->send = interface;
+    this->rtable = ctx.rtable;
 
     memset(&ring, 0, sizeof(ring));
 

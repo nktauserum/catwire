@@ -58,6 +58,7 @@ Transport::Worker::Worker(Context ctx, int fd, Queue<u32>* queue, Tunnel* interf
     this->fd     = fd;
     this->queue  = queue;
     this->pool   = ctx.outgoing_pool;
+    this->incoming_pool = ctx.incoming_pool;
     this->rtable = ctx.rtable;
     this->ch     = ctx.outgoing_channel;
     this->send   = interface;

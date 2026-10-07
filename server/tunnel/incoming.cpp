@@ -23,50 +23,56 @@ void Tunnel::Worker::incoming() {
 
             __info info;
             memcpy(&info, &cqe->user_data, sizeof(__info));
-
             u32 idx = cqe->flags >> 16;
-            void* payload = BUF_OFFSET(buffers, idx);
-            int sz = cqe->res;
-
-            u32 dest_ip = reinterpret_cast<struct iphdr*>(payload)->daddr;
-            u32 session_idx = ((dest_ip >> 24) & 0xFF) - 2; // subtract two from the fourth byte 
-
-            auto session = &rtable->table[session_idx];
-            if (!session->is_active.load(std::memory_order_consume)) goto cleanup;
 
             if (info.op == READ) {
-                u8 nonce[12] = {0};
-                u64 counter  = session->add_counter();
-                u64 bcounter = __builtin_bswap64(counter);
-                memcpy(&nonce[4], &bcounter, sizeof(u64));
-                
-                u32 out_idx = pool->Acquire();
-                IncomingBuffer* out_buf = &pool->data[out_idx];
+                void* payload = BUF_OFFSET(buffers, idx);
+                int sz = cqe->res;
 
+                u32 dest_ip = reinterpret_cast<struct iphdr*>(payload)->daddr;
+                u32 ip_byte = (dest_ip >> 24) & 0xFF; 
+                if (ip_byte < 2 || ip_byte > MAX_CLIENTS) goto cleanup; // TODO: check constant bounds
+
+                u32 lookup_idx = ip_byte - 2;
+                std::cout << "[INFO]: Incoming packet for session " << lookup_idx << std::endl;
+
+                int session_idx = rtable->active(lookup_idx);
+                if (session_idx < 0) goto cleanup;
+                auto session = &rtable->table[session_idx];
                 {
-                    std::shared_lock<std::shared_mutex> lock(session->mtx);
+                    u8 nonce[12] = {0};
+                    u64 counter  = session->add_counter();
+                    u64 bcounter = __builtin_bswap64(counter);
+                    memcpy(&nonce[4], &bcounter, sizeof(u64));
+                    
+                    u32 out_idx = pool->Acquire();
+                    IncomingBuffer* out_buf = &pool->data[out_idx];
 
-                    int res = crypto_aead_aes256gcm_encrypt_afternm(
-                        out_buf->packet.payload, &out_buf->len,
-                        reinterpret_cast<u8*>(payload), sz,
-                        NULL, 0, NULL,
-                        nonce, &session->crypto_ctx
-                    );
-                    if (res < 0) {
-                        std::cout << "Error encrypt outgoing packet: ret " << res << std::endl;
-                        pool->Release(out_idx);
-                        goto cleanup;
+                    {
+                        std::shared_lock<std::shared_mutex> lock(session->mtx);
+
+                        int res = crypto_aead_aes256gcm_encrypt_afternm(
+                            out_buf->packet.payload, &out_buf->len,
+                            reinterpret_cast<u8*>(payload), sz,
+                            NULL, 0, NULL,
+                            nonce, &session->crypto_ctx
+                        );
+                        if (res < 0) {
+                            std::cout << "Error encrypt outgoing packet: ret " << res << std::endl;
+                            pool->Release(out_idx);
+                            goto cleanup;
+                        }
+                        out_buf->addr = session->remote_addr;
                     }
-                    out_buf->addr = session->remote_addr;
+
+                    out_buf->packet.header = {
+                        .packetType = DATA,
+                        .peerIndex = lookup_idx,
+                        .counter = counter,
+                    };
+
+                    send->Enqueue(out_idx);
                 }
-
-                out_buf->packet.header = {
-                    .packetType = DATA,
-                    .peerIndex = session_idx,
-                    .counter = counter,
-                };
-
-                send->Enqueue(out_idx);
             }
 
         cleanup:
