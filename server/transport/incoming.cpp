@@ -41,6 +41,7 @@ void Transport::Worker::incoming() {
                 Packet* packet = reinterpret_cast<Packet*>(io_uring_recvmsg_payload(out, &msg));
                 u32 sz = io_uring_recvmsg_payload_length(out, cqe->res, &msg);
 
+                std::cout << "[INFO]: Incoming packet size " << sz << std::endl;
                 int idx;
                 switch (packet->header.packetType) {
                 case DATA: 
@@ -58,7 +59,9 @@ void Transport::Worker::incoming() {
                 if (idx < 0) goto cleanup;
 
                 send->Enqueue(idx);
-            }
+            } else {
+                transport_pool->Release(info.bid);
+            } 
 
         cleanup:
             io_uring_buf_ring_add(buf_ring, BUF_OFFSET(buffers, idx), buffer_size, idx, io_uring_buf_ring_mask(entries), 0);

@@ -1,6 +1,6 @@
 #include "../interface.hpp"
 
-#include <vector>
+#include <iostream>
 #include <liburing.h>
 
 int Transport::Worker::enqueue(u32 idx) {
@@ -25,9 +25,8 @@ int Transport::Worker::enqueue(u32 idx) {
 
     io_uring_prep_sendmsg(sqe, fd, &buf->hdr, 0);
     __info info = {
-        .fd = static_cast<u32>(fd),
         .op = WRITE, 
-        .bid = 0
+        .bid = idx 
     };
 
     u64 i = 0;
@@ -35,6 +34,8 @@ int Transport::Worker::enqueue(u32 idx) {
 
     io_uring_sqe_set_data64(sqe, i);
     io_uring_submit(&ring); // TODO: add batching queue 
+
+    std::cout << "[INFO]: Sent packet size " << buf->payload_len + sizeof(Header) << std::endl;
 
     return 0;
 }

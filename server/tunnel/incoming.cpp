@@ -34,11 +34,10 @@ void Tunnel::Worker::incoming() {
                 if (ip_byte < 2 || ip_byte > MAX_CLIENTS) goto cleanup; // TODO: check constant bounds
 
                 u32 lookup_idx = ip_byte - 2;
-                std::cout << "[INFO]: Incoming packet for session " << lookup_idx << std::endl;
-
                 int session_idx = rtable->active(lookup_idx);
                 if (session_idx < 0) goto cleanup;
                 auto session = &rtable->table[session_idx];
+                std::cout << "[INFO]: Outgoing packet for session " << lookup_idx << std::endl;
                 {
                     u8 nonce[12] = {0};
                     u64 counter  = session->add_counter();
@@ -73,6 +72,8 @@ void Tunnel::Worker::incoming() {
 
                     send->Enqueue(out_idx);
                 }
+            } else {
+                tunnel_pool->Release(info.bid);
             }
 
         cleanup:

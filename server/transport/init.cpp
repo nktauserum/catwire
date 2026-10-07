@@ -135,9 +135,8 @@ Transport::Worker::Worker(Context ctx, int fd, Tunnel* interface) {
 
     u64 inf = 0;
     __info info = {
-        .fd  = static_cast<u32>(fd),
         .op  = READ,
-        .bid = reg.bgid
+        .bid = 0 
     };
     memcpy(&inf, &info, sizeof(__info));
     io_uring_sqe_set_data64(sqe, inf);

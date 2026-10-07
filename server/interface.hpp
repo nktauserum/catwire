@@ -32,9 +32,8 @@ protected:
     };
 
     struct __info {
-        u32 fd;
-        u16 op;
-        u16 bid;
+        u32 op;
+        u32 bid;
     };
 
     int entries, buffer_size;

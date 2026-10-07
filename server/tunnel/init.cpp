@@ -120,7 +120,6 @@ Tunnel::Worker::Worker(Context ctx, int fd, Transport* interface) {
 
     u64 inf = 0;
     __info info = {
-        .fd  = static_cast<u32>(fd),
         .op  = READ,
         .bid = reg.bgid
     };

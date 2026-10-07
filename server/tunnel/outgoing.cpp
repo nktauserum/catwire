@@ -6,7 +6,16 @@ int Tunnel::Worker::enqueue(u32 idx) {
     if (!sqe) return -1;
    
     io_uring_prep_write(sqe, fd, reinterpret_cast<void*>(data->payload), data->len, 0);
-    io_uring_sqe_set_data64(sqe, idx); // TODO: provide __info struct
+
+    __info info = {
+        .op  = WRITE,
+        .bid = idx
+    };
+
+    u64 i = 0;
+    memcpy(&i, &info, sizeof(u64));
+
+    io_uring_sqe_set_data64(sqe, i);
 
     io_uring_submit(&ring);
 
