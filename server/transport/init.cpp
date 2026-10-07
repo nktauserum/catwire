@@ -1,4 +1,4 @@
-#include "../transport.hpp"
+#include "../interface.hpp"
 
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -9,7 +9,7 @@
 
 #include "../../common/macro.h"
 
-void Transport::Init(Context ctx, Config config, Interface* interface) {
+void Transport::Init(Context ctx, Config config, Tunnel* interface) {
     workers.reserve(config.num_cores*2);
 
     struct sockaddr_in addr;
@@ -49,13 +49,13 @@ void Transport::Init(Context ctx, Config config, Interface* interface) {
     }
 }
 
-Transport::Worker::Worker(Context ctx, int fd, Queue<u32>* queue, Interface* i) {
+Transport::Worker::Worker(Context ctx, int fd, Queue<u32>* queue, Tunnel* interface) {
     this->fd     = fd;
     this->queue  = queue;
     this->pool   = ctx.outgoing_pool;
     this->rtable = ctx.rtable;
     this->ch     = ctx.outgoing_channel;
-    this->send   = i;
+    this->send   = interface;
 
     memset(&ring, 0, sizeof(ring));
 

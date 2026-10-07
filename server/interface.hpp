@@ -7,18 +7,15 @@
 
 #include "models/queue.h"
 #include "models/channel.h"
+#include "models/pool.h"
+#include "utils/context.hpp"
+#include "utils/config.hpp"
 
 #include "routing.hpp"
 
 #define BUF_OFFSET(base, idx) reinterpret_cast<void*>(reinterpret_cast<unsigned char*>(base) + buffer_size*idx)
 
 class Interface {
-public:
-    virtual int Enqueue(u32) = 0;
-    
-};
-
-class WorkerInterface {
 protected:
     int fd;
 
@@ -29,8 +26,6 @@ protected:
     RoutingTable* rtable;
     Queue<u32>* queue;
     Channel<u32>* ch;
-
-    Interface* send;
 
     enum : u16 {
         READ,
@@ -48,4 +43,64 @@ protected:
 public:
     int enqueue(u32);
     void incoming();
+};
+
+class Tunnel;
+class Transport {
+    std::vector<std::thread> workers;
+
+public:
+    class Worker final : public Interface {
+        struct msghdr msg;
+
+        static const int entries = 64;
+        static const int buffer_size = 1500;
+
+        SharedPool<OutgoingBuffer>* pool;
+        SharedPool<IncomingBuffer>* incoming_pool;
+
+        Tunnel* send;
+
+        int __process_data(Packet*, u32, Address);
+        int __process_handshake(Packet*, u32, Address);
+        
+        typedef struct {
+            struct msghdr msg;
+            struct iovec vec;
+        } send_msg;
+
+        std::vector<send_msg> send_queue;
+
+    public:
+        int enqueue(u32);
+        void incoming();
+
+        Worker(Context, int, Queue<u32>*, Tunnel*);
+    };
+
+    int Enqueue(u32);
+    void Init(Context, Config, Tunnel*);
+};
+
+class Tunnel {
+    std::vector<std::thread> workers;
+
+public:
+    class Worker final : public Interface {
+        static const int entries = 64;
+        static const int buffer_size = 1500;
+
+        Transport* send;
+
+        SharedPool<IncomingBuffer>* pool;
+        SharedPool<OutgoingBuffer>* incoming_pool; // TODO: provide
+    public: 
+        void incoming();
+        int enqueue(u32);
+
+        Worker(Context, int, Queue<u32>*, Transport*);
+    };
+
+    int Enqueue(u32);
+    void Init(Context, Config, Transport*);
 };

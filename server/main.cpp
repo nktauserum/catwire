@@ -3,8 +3,7 @@
 #include "../common/macro.h"
 
 #include "utils/config.hpp"
-#include "transport.hpp"
-#include "tunnel.hpp"
+#include "interface.hpp"
 
 // #define WORKERS_COUNT 8
 //

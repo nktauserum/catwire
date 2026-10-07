@@ -1,4 +1,4 @@
-#include "../tunnel.hpp"
+#include "../interface.hpp"
 
 #include <fcntl.h>
 #include <linux/if.h>
@@ -12,7 +12,7 @@
 
 static const char* ifname = "cw0";
 
-void Tunnel::Tunnel::Init(Context ctx, Config config, Interface* interface) {
+void Tunnel::Tunnel::Init(Context ctx, Config config, Transport* interface) {
     workers.reserve(config.num_cores*2);
 
     struct ifreq ifr = {0};
@@ -40,7 +40,7 @@ void Tunnel::Tunnel::Init(Context ctx, Config config, Interface* interface) {
     }
 }
 
-Tunnel::Worker::Worker(Context ctx, int fd, Queue<u32>* queue, Interface* interface) {
+Tunnel::Worker::Worker(Context ctx, int fd, Queue<u32>* queue, Transport* interface) {
     this->fd = fd;
     this->queue = queue;
     this->ch = ctx.outgoing_channel;
