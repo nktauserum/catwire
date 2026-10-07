@@ -10,7 +10,7 @@
 #include <sodium.h>
 
 #include "../common/types.h"
-#include "../common/models.h"
+#include "../common/macro.h"
 #include "models/client.h"
 
 #define MAX_CLIENTS 256
@@ -44,7 +44,6 @@ public:
 
     u8 publicKey[32];
 
-
     int exists(u8* publicKey) {
         for (int i = 0; i < size; ++i) {
             int idx = available[i];
@@ -63,15 +62,16 @@ public:
 
         auto session = &table[sessionIndex];
 
-        u8 raw_secret [32]                             = {0};
-        u8 hash_args  [32*3]                           = {0};
+        u8 raw_secret [32]   = {0};
+        u8 hash_args  [32*3] = {0};
 
         if (crypto_scalarmult(raw_secret, privateKey, client_pubkey) != 0) return -1;
 
-        memcpy(hash_args,    raw_secret,          32);
+        memcpy(hash_args,    raw_secret,    32);
+        memcpy(hash_args+32, publicKey,     32);
+        memcpy(hash_args+64, client_pubkey, 32);
+
         sodium_memzero(raw_secret, 32);
-        memcpy(hash_args+32, publicKey, 32);
-        memcpy(hash_args+64, client_pubkey,           32);
         
         {
             std::unique_lock<std::shared_mutex> lock(session->mtx);
@@ -97,15 +97,23 @@ public:
     } 
 
     RoutingTable(u8* seed, std::vector<Client>& clients) {
+        if (clients.size() > MAX_CLIENTS)
+            panic("config: too many clients. Check MAX_CLIENTS constant.");
+
         for (size = 0; size < clients.size(); ++size) {
             auto& client = clients[size];
-            int idx = reinterpret_cast<u8*>(&client.local_addr)[3]-2;
-            if (idx < 0) continue; // actually, we should panic: addresses ...0 and ...1 are reserved
+            int idx = ((client.local_addr >> 24) & 0xFF) - 2;
+            if (idx < 0) panic("config: addresses ...0 and ...1 are reserved. Check client addresses.");
             
             memcpy(table[idx].publicKey, client.publicKey, 32);
             table[idx].local_addr = client.local_addr;
 
             available[size] = idx;
         }
+
+        if (crypto_kx_seed_keypair(publicKey, privateKey, seed) != 0) {
+            panic("config: main: check provided private keys again");
+        }
+
     }
 };
