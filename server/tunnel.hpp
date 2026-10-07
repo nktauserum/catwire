@@ -11,11 +11,11 @@
 #include "models/queue.h"
 
 
-class Tunnel {
+class Tunnel final : public Interface {
     std::vector<std::thread> workers;
 
 public:
-    class Worker final : public Interface {
+    class Worker final : public WorkerInterface {
         static const int entries = 64;
         static const int buffer_size = 1500;
         SharedPool<IncomingBuffer>* pool;
@@ -24,11 +24,11 @@ public:
         void incoming();
         int enqueue(u32);
 
-        Worker(Context, int, Queue<u32>*);
+        Worker(Context, int, Queue<u32>*, Interface*);
     };
 
-    int Enqueue();
-    void Init(Context, Config);
+    int Enqueue(u32);
+    void Init(Context, Config, Interface*);
 
     Tunnel();
 };

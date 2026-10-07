@@ -10,6 +10,7 @@
 #include "config.hpp"
 
 #include "../routing.hpp"
+#include "../interface.hpp"
 
 struct Context {
     Channel<u32>               *incoming_channel, *outgoing_channel;

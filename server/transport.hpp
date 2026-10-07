@@ -10,11 +10,11 @@
 #include "utils/context.hpp"
 #include "utils/config.hpp"
 
-class Transport {
+class Transport final : public Interface {
     std::vector<std::thread> workers;
 
 public:
-    class Worker final : public Interface {
+    class Worker final : public WorkerInterface {
         struct msghdr msg;
 
         static const int entries = 64;
@@ -37,11 +37,11 @@ public:
         int enqueue(u32);
         void incoming();
 
-        Worker(Context, int, Queue<u32>*);
+        Worker(Context, int, Queue<u32>*, Interface*);
     };
 
     int Enqueue(u32);
-    void Init(Context, Config);
+    void Init(Context, Config, Interface*);
 
     Transport();
 };

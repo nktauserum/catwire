@@ -13,6 +13,11 @@
 #define BUF_OFFSET(base, idx) reinterpret_cast<void*>(reinterpret_cast<unsigned char*>(base) + buffer_size*idx)
 
 class Interface {
+public:
+    int Enqueue(u32);
+};
+
+class WorkerInterface {
 protected:
     int fd;
 
@@ -23,6 +28,8 @@ protected:
     RoutingTable* rtable;
     Queue<u32>* queue;
     Channel<u32>* ch;
+
+    Interface* send;
 
     enum : u16 {
         READ,
