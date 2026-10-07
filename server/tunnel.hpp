@@ -11,7 +11,7 @@
 #include "models/queue.h"
 
 
-class Tunnel final : public Interface {
+class Tunnel final : virtual public Interface {
     std::vector<std::thread> workers;
 
 public:

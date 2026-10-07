@@ -54,3 +54,7 @@ int Transport::Worker::enqueue(u32 idx) {
 
     return 0;
 }
+
+int Transport::Enqueue(u32) {
+    return -1; // TODO
+}

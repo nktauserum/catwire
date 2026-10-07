@@ -14,7 +14,8 @@
 
 class Interface {
 public:
-    int Enqueue(u32);
+    virtual int Enqueue(u32) = 0;
+    
 };
 
 class WorkerInterface {

@@ -10,7 +10,7 @@
 #include "utils/context.hpp"
 #include "utils/config.hpp"
 
-class Transport final : public Interface {
+class Transport final : virtual public Interface {
     std::vector<std::thread> workers;
 
 public:
@@ -40,6 +40,6 @@ public:
         Worker(Context, int, Queue<u32>*, Interface*);
     };
 
-    int Enqueue(u32);
+    int Enqueue(u32) override;
     void Init(Context, Config, Interface*);
 };
