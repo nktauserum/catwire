@@ -53,7 +53,6 @@ void Transport::Worker::incoming() {
 
                 if (idx < 0) goto cleanup;
                 ch->push(static_cast<u32>(idx));
-
             }
 
         cleanup:
@@ -127,7 +126,7 @@ int Transport::Worker::__process_handshake(Packet* packet, u32 sz, Address addr)
     };
     memcpy(&buf->packet.payload, rtable->publicKey, crypto_kx_PUBLICKEYBYTES);
 
-    // enqueue(out_idx);
+    send->Enqueue(out_idx);
 
     return -1; // It's neither a placeholder nor an issue. A negative value indicates that we don't need to send anything to the Tunnel
 }

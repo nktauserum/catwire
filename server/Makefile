@@ -1,21 +1,22 @@
 CXX = g++
-CXXFLAGS = -std=c++23 -Wall -Wextra -pedantic -g 
-LIBS = -luring -lsodium -lstdc++ 
-
+CXXFLAGS = -std=c++23 -Wall -Wextra -pedantic -g
+LIBS = -luring -lsodium -lstdc++
 BUILD_DIR = build
-SRC = main.cpp incoming.cpp outgoing.cpp
+
+SRC = $(shell find . -name "*.cpp" | sed 's|^\./||')
 OBJ = $(addprefix $(BUILD_DIR)/, $(SRC:.cpp=.o))
 TARGET = $(BUILD_DIR)/srv
 
+.PHONY: all clean run
+
 all: $(TARGET)
 
-$(BUILD_DIR):
-	mkdir -p $@
-
-$(TARGET): $(OBJ) | $(BUILD_DIR)
+$(TARGET): $(OBJ)
+	@mkdir -p $(dir $@)
 	$(CXX) -o $@ $^ $(LIBS)
 
-$(BUILD_DIR)/%.o: %.cpp | $(BUILD_DIR)
+$(BUILD_DIR)/%.o: %.cpp
+	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 run: all
@@ -23,5 +24,3 @@ run: all
 
 clean:
 	rm -rf $(BUILD_DIR)
-
-.PHONY: all clean run

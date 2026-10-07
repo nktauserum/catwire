@@ -9,7 +9,7 @@
 
 #include "../../common/macro.h"
 
-void Transport::Init(Context ctx, Config config, Interface* i) {
+void Transport::Init(Context ctx, Config config, Interface* interface) {
     workers.reserve(config.num_cores*2);
 
     struct sockaddr_in addr;
@@ -42,7 +42,7 @@ void Transport::Init(Context ctx, Config config, Interface* i) {
             panic("bind");
         }
 
-        Worker w(ctx, fd, ctx.incoming_channel->add_worker(), i);
+        Worker w(ctx, fd, ctx.incoming_channel->add_worker(), interface);
         workers[i] = std::thread([&w](){
             w.incoming();
         });

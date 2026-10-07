@@ -12,7 +12,7 @@
 
 static const char* ifname = "cw0";
 
-void Tunnel::Tunnel::Init(Context ctx, Config config, Interface* i) {
+void Tunnel::Tunnel::Init(Context ctx, Config config, Interface* interface) {
     workers.reserve(config.num_cores*2);
 
     struct ifreq ifr = {0};
@@ -33,20 +33,20 @@ void Tunnel::Tunnel::Init(Context ctx, Config config, Interface* i) {
             panic("setup tun");
         }
 
-        Worker w(ctx, qfd, ctx.outgoing_channel->add_worker(), i);
+        Worker w(ctx, qfd, ctx.outgoing_channel->add_worker(), interface);
         workers[i] = std::thread([&w](){
             w.incoming();
         });
     }
 }
 
-Tunnel::Worker::Worker(Context ctx, int fd, Queue<u32>* queue, Interface* i) {
+Tunnel::Worker::Worker(Context ctx, int fd, Queue<u32>* queue, Interface* interface) {
     this->fd = fd;
     this->queue = queue;
     this->ch = ctx.outgoing_channel;
     this->pool = ctx.incoming_pool;
     this->incoming_pool = ctx.outgoing_pool;
-    this->send = i;
+    this->send = interface;
 
     memset(&ring, 0, sizeof(ring));
 
