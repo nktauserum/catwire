@@ -12,14 +12,15 @@
 
 static const char* ifname = "cw0";
 
-void Tunnel::Tunnel::Init(Context ctx, Config config, Transport* interface) {
-    workers.reserve(config.num_cores*2);
+void Tunnel::Init(Context ctx, Config config, Transport* interface) {
+    workers.reserve(config.num_cores);
+    threads.reserve(config.num_cores);
 
     struct ifreq ifr = {0};
     ifr.ifr_flags = IFF_TUN | IFF_NO_PI | IFF_MULTI_QUEUE;
     memcpy(ifr.ifr_ifrn.ifrn_name, ifname, strlen(ifname));
 
-    for (int i = 0; i < config.num_cores*2; ++i) {
+    for (int i = 0; i < config.num_cores; ++i) {
         int qfd = open("/dev/net/tun", O_RDWR);
         if (qfd == -1) {
             perror("tun");
@@ -34,7 +35,8 @@ void Tunnel::Tunnel::Init(Context ctx, Config config, Transport* interface) {
         }
 
         Worker w(ctx, qfd, ctx.outgoing_channel->add_worker(), interface);
-        workers[i] = std::thread([&w](){
+        workers[i] = w; 
+        threads[i] = std::jthread([&w](){
             w.incoming();
         });
     }

@@ -10,7 +10,8 @@
 #include "../../common/macro.h"
 
 void Transport::Init(Context ctx, Config config, Tunnel* interface) {
-    workers.reserve(config.num_cores*2);
+    workers.reserve(config.num_cores);
+    threads.reserve(config.num_cores);
 
     struct sockaddr_in addr;
     memset(&addr, 0, sizeof(addr));
@@ -43,7 +44,8 @@ void Transport::Init(Context ctx, Config config, Tunnel* interface) {
         }
 
         Worker w(ctx, fd, ctx.incoming_channel->add_worker(), interface);
-        workers[i] = std::thread([&w](){
+        workers[i] = w;
+        threads[i] = std::jthread([&w](){
             w.incoming();
         });
     }

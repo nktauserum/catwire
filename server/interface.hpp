@@ -1,5 +1,6 @@
 #pragma once
-
+#include <vector>
+#include <thread>
 #include <liburing.h>
 
 #include "../common/types.h"
@@ -75,6 +76,7 @@ class Transport {
         Worker(Context, int, Queue<u32>*, Tunnel*);
     };
 
+    std::vector<std::jthread> threads;
     std::vector<Worker> workers;
     std::atomic<u32> next_worker = 0;
 public:
@@ -83,7 +85,6 @@ public:
 };
 
 class Tunnel {
-
     class Worker final : public Interface {
         static const int entries = 64;
         static const int buffer_size = 1500;
@@ -99,6 +100,7 @@ class Tunnel {
         Worker(Context, int, Queue<u32>*, Transport*);
     };
 
+    std::vector<std::jthread> threads;
     std::vector<Worker> workers;
     std::atomic<u32> next_worker = 0;
 public:
