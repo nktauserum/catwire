@@ -1,17 +1,7 @@
 #pragma once
 
 #include "../../common/types.h"
-
-typedef struct {
-    u8  packetType;
-    u64 peerIndex;
-    u64 counter;
-} __attribute__((packed)) Header;
-
-typedef struct {
-    Header  header;
-    u8      payload[1420+16];
-} __attribute__((packed)) Packet;
+#include "../../common/models.h"
 
 typedef struct {
     u64     idx;

@@ -21,7 +21,7 @@ typedef struct {
 
 typedef struct {
     Header  header;
-    u8      payload[65535+16];
+    u8      payload[1420+16];
 } __attribute__((packed)) Packet;
 
 typedef struct {
