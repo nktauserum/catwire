@@ -36,7 +36,7 @@ void Tunnel::Init(Context ctx, Config config, Transport* interface) {
 
         workers[i] = Worker(ctx, qfd, ctx.incoming_channel->add_worker(), interface);
         auto w = &workers[i];
-        threads[i] = std::jthread([&w](){
+        threads[i] = std::thread([w](){
             w->incoming();
         });
     }

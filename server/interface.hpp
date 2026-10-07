@@ -77,7 +77,7 @@ class Transport {
         Worker(Context, int, Queue<u32>*, Tunnel*);
     };
 
-    std::vector<std::jthread> threads;
+    std::vector<std::thread> threads;
     std::vector<Worker> workers;
     std::atomic<u32> next_worker = 0;
 public:
@@ -101,7 +101,7 @@ class Tunnel {
         Worker(Context, int, Queue<u32>*, Transport*);
     };
 
-    std::vector<std::jthread> threads;
+    std::vector<std::thread> threads;
     std::vector<Worker> workers;
     std::atomic<u32> next_worker = 0;
 public:

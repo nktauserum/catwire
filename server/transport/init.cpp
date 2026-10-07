@@ -21,7 +21,7 @@ void Transport::Init(Context ctx, Config config, Tunnel* interface) {
 
     int opt = 1;
 
-    for (int i = 0; i < config.num_cores*2; ++i) {
+    for (int i = 0; i < config.num_cores; ++i) {
         int fd = socket(AF_INET, SOCK_DGRAM, 0);
         if (fd < 0) {
             perror("UDP socket");
@@ -44,8 +44,8 @@ void Transport::Init(Context ctx, Config config, Tunnel* interface) {
         }
 
         workers[i] = Worker(ctx, fd, ctx.incoming_channel->add_worker(), interface);
-        auto w = &workers[i];
-        threads[i] = std::jthread([&w](){
+        Worker* w = &workers[i];
+        threads[i] = std::thread([w](){
             w->incoming();
         });
     }
