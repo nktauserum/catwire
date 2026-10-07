@@ -1,4 +1,4 @@
-#include "../transport.hpp"
+#include "../interface.hpp"
 
 #include <vector>
 #include <cstring>
@@ -45,8 +45,12 @@ void Transport::Worker::incoming() {
                 switch (packet->header.packetType) {
                 case DATA: 
                     idx = __process_data(packet, sz, *addr);
+                    break;
+
                 case HANDSHAKE: 
                     idx = __process_handshake(packet, sz, *addr);
+                    break;
+
                 default:
                     goto cleanup;
                 }
