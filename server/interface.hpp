@@ -47,9 +47,6 @@ public:
 
 class Tunnel;
 class Transport {
-    std::vector<std::thread> workers;
-
-public:
     class Worker final : public Interface {
         struct msghdr msg;
 
@@ -78,14 +75,15 @@ public:
         Worker(Context, int, Queue<u32>*, Tunnel*);
     };
 
+    std::vector<Worker> workers;
+    std::atomic<u32> next_worker = 0;
+public:
     int Enqueue(u32);
     void Init(Context, Config, Tunnel*);
 };
 
 class Tunnel {
-    std::vector<std::thread> workers;
 
-public:
     class Worker final : public Interface {
         static const int entries = 64;
         static const int buffer_size = 1500;
@@ -101,6 +99,9 @@ public:
         Worker(Context, int, Queue<u32>*, Transport*);
     };
 
+    std::vector<Worker> workers;
+    std::atomic<u32> next_worker = 0;
+public:
     int Enqueue(u32);
     void Init(Context, Config, Transport*);
 };

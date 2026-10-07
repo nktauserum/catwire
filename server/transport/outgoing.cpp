@@ -1,4 +1,4 @@
-#include "../transport.hpp"
+#include "../interface.hpp"
 
 #include <vector>
 #include <chrono>
@@ -55,6 +55,7 @@ int Transport::Worker::enqueue(u32 idx) {
     return 0;
 }
 
-int Transport::Enqueue(u32) {
-    return -1; // TODO
+int Transport::Enqueue(u32 idx) {
+    int worker_idx = next_worker.fetch_add(1, std::memory_order_relaxed) % workers.size();
+    return workers[worker_idx].enqueue(idx);
 }
