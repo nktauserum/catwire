@@ -43,10 +43,10 @@ void Transport::Init(Context ctx, Config config, Tunnel* interface) {
             panic("bind");
         }
 
-        Worker w(ctx, fd, ctx.incoming_channel->add_worker(), interface);
-        workers[i] = w;
+        workers[i] = Worker(ctx, fd, ctx.incoming_channel->add_worker(), interface);
+        auto w = &workers[i];
         threads[i] = std::jthread([&w](){
-            w.incoming();
+            w->incoming();
         });
     }
 }

@@ -34,10 +34,10 @@ void Tunnel::Init(Context ctx, Config config, Transport* interface) {
             panic("setup tun");
         }
 
-        Worker w(ctx, qfd, ctx.outgoing_channel->add_worker(), interface);
-        workers[i] = w; 
+        workers[i] = Worker(ctx, qfd, ctx.incoming_channel->add_worker(), interface);
+        auto w = &workers[i];
         threads[i] = std::jthread([&w](){
-            w.incoming();
+            w->incoming();
         });
     }
 }
