@@ -6,13 +6,11 @@
 typedef struct {
     u64     idx;
     u64     len;
-    union {
-        struct {
-            struct msghdr hdr;
-            struct iovec  vec;
-        };                      // send
-        Address addr;           // receive
-    };
+    struct {
+        struct msghdr hdr;
+        struct iovec  vec;
+    };                      
+    Address addr; 
     Packet  packet;
 } TransportBuffer;
 
