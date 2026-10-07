@@ -10,7 +10,7 @@ int Transport::Worker::enqueue(u32 idx) {
 
     buf->vec = (struct iovec) {
         .iov_base = reinterpret_cast<void*>(&buf->packet),
-        .iov_len  = buf->len + sizeof(Header),
+        .iov_len  = buf->payload_len + sizeof(Header),
     };
 
     buf->hdr = (struct msghdr) { 

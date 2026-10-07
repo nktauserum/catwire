@@ -52,7 +52,7 @@ void Tunnel::Worker::incoming() {
                         std::shared_lock<std::shared_mutex> lock(session->mtx);
 
                         int res = crypto_aead_aes256gcm_encrypt_afternm(
-                            out_buf->packet.payload, &out_buf->len,
+                            out_buf->packet.payload, &out_buf->payload_len,
                             reinterpret_cast<u8*>(payload), sz,
                             NULL, 0, NULL,
                             nonce, &session->crypto_ctx

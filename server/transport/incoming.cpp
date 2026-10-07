@@ -120,7 +120,7 @@ int Transport::Worker::__process_handshake(Packet* packet, u32 sz, Address addr)
 
     buf->idx    = out_idx;
     buf->addr   = buf->addr;
-    buf->len    = crypto_kx_PUBLICKEYBYTES;
+    buf->payload_len    = crypto_kx_PUBLICKEYBYTES;
     buf->packet = Packet {
         .header  = Header {
             .packetType = HANDSHAKE,
