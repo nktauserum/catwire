@@ -9,7 +9,7 @@
 
 #include "../../common/macro.h"
 
-Transport::Transport(Context ctx, Config config) {
+void Transport::Init(Context ctx, Config config) {
     workers.reserve(config.num_cores*2);
 
     struct sockaddr_in addr;

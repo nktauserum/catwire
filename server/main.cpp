@@ -9,11 +9,12 @@
 #include <sodium.h>
 
 #include "../common/types.h"
+#include "../common/macro.h"
 
-#include "incoming.hpp"
-#include "outgoing.hpp"
-#include "config.hpp"
+#include "utils/config.hpp"
 #include "routing.hpp"
+#include "transport.hpp"
+#include "tunnel.hpp"
 
 #define WORKERS_COUNT 8
 
@@ -228,61 +229,22 @@ public:
         outgoing.listen(&outgoingPool, &outgoingChannel);
     }
 
-    Application(Incoming& incoming, Outgoing& outgoing, Config* config) : 
-        incomingChannel{Channel<u32>(WORKERS_COUNT)}, 
-        incomingPool{SharedPool<IncomingBuffer>()},
-        incoming{std::move(incoming)},
-        outgoingChannel{Channel<u32>(WORKERS_COUNT)},
-        outgoingPool{SharedPool<OutgoingBuffer>()},
-        outgoing{std::move(outgoing)},
-        routingTable{RoutingTable(config->clients)}
-    {
-        if (sodium_init() < 0) 
-            throw panic("panic: failed to initialize libsodium");
 
-        if (!crypto_aead_aes256gcm_is_available()) 
-            throw panic("panic: AES256-GCM is not supported by your hardware (CPU)");
-
-        if (crypto_kx_seed_keypair(publicKey, privateKey, config->seed) != 0) {
-            throw panic("panic: check provided private key again");
-        }
-    };
 };
 
 int main(void) {
-    Config config = Config::load_from_file("config.ini");
+    if (sodium_init() < 0) 
+        panic("failed to initialize libsodium");
 
-    Incoming incoming;
-    if (!incoming.init(config.port)) {
-        perror("Incoming::init()");
-        return 1;
-    }
+    if (!crypto_aead_aes256gcm_is_available()) 
+        panic("AES256-GCM is not supported by your hardware (CPU)");
 
-    Outgoing outgoing;
-    if (!outgoing.init("cw1")) {
-        perror("Outgoing::init()");
-        return 1;
-    }
+    Config config("config.ini");
 
-    Application app{incoming, outgoing, &config};
+    Tunnel    tun;
+    Transport udp;
 
-    std::thread workers[WORKERS_COUNT*2];
-    for (int i = 0; i < WORKERS_COUNT; ++i) {
-        workers[i] = std::thread([&app](){
-            app.incomingWorker();
-        });
-    }
-    for (int i = WORKERS_COUNT; i < WORKERS_COUNT*2; ++i) {
-        workers[i] = std::thread([&app](){
-            app.outgoingWorker();
-        });
-    }
-
-    std::thread i([&app](){
-        app.listen_incoming();
-    });
-
-    app.listen_outgoing();
+    Context ctx = { };
     
     return 0;
 }

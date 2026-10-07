@@ -41,7 +41,7 @@ public:
     };
 
     int Enqueue(u32);
-    int Init();
+    void Init(Context, Config);
 
-    Transport(Context, Config); 
+    Transport();
 };

@@ -12,7 +12,7 @@
 
 static const char* ifname = "cw0";
 
-Tunnel::Tunnel(Context ctx, Config config) {
+void Tunnel::Tunnel::Init(Context ctx, Config config) {
     workers.reserve(config.num_cores*2);
 
     struct ifreq ifr = {0};
@@ -35,10 +35,7 @@ Tunnel::Tunnel(Context ctx, Config config) {
 
         Worker w(ctx, qfd, ctx.outgoing_channel->add_worker());
         workers[i] = std::thread([&w](){
-            w.Incoming();
-        });
-        workers[++i] = std::thread([&w](){
-            w.Outgoing();
+            w.incoming();
         });
     }
 }

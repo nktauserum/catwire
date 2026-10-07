@@ -21,11 +21,14 @@ public:
         SharedPool<IncomingBuffer>* pool;
         SharedPool<OutgoingBuffer>* incoming_pool; // TODO: provide
     public: 
-        void Incoming();
-        void Outgoing();
+        void incoming();
+        int enqueue(u32);
 
         Worker(Context, int, Queue<u32>*);
     };
 
-    Tunnel(Context, Config);
+    int Enqueue();
+    void Init(Context, Config);
+
+    Tunnel();
 };
