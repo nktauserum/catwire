@@ -41,12 +41,12 @@ private:
 public:
     std::array<Session, MAX_CLIENTS> table;
     std::array<int, MAX_CLIENTS> lookup;
-    int num_clients = 0;
+    u32 num_clients = 0;
 
     u8 publicKey[32];
 
     int exists(u8* publicKey) {
-        for (int i = 0; i < num_clients; ++i) {
+        for (u32 i = 0; i < num_clients; ++i) {
             if(memcmp(table[i].publicKey, publicKey, 32) == 0) return i;
         }
 

@@ -21,7 +21,7 @@ void Tunnel::Init(Context ctx, Config config, Transport* interface) {
     ifr.ifr_flags = IFF_TUN | IFF_NO_PI | IFF_MULTI_QUEUE;
     memcpy(ifr.ifr_ifrn.ifrn_name, ifname, strlen(ifname));
 
-    for (int i = 0; i < config.num_cores; ++i) {
+    for (u32 i = 0; i < config.num_cores; ++i) {
         int qfd = open("/dev/net/tun", O_RDWR);
         if (qfd == -1) {
             perror("tun");

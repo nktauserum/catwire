@@ -22,7 +22,7 @@ void Transport::Init(Context ctx, Config config, Tunnel* interface) {
 
     int opt = 1;
 
-    for (int i = 0; i < config.num_cores; ++i) {
+    for (u32 i = 0; i < config.num_cores; ++i) {
         int fd = socket(AF_INET, SOCK_DGRAM, 0);
         if (fd < 0) {
             perror("UDP socket");
