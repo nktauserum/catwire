@@ -35,7 +35,7 @@ void Tunnel::Init(Context ctx, Config config, Transport* interface) {
             panic("setup tun");
         }
 
-        workers.push_back(Worker(ctx, qfd, ctx.incoming_channel->add_worker(), interface));
+        workers.push_back(Worker(ctx, qfd, interface));
         auto w = &workers[i];
         threads.push_back(std::thread([w](){
             w->incoming();
@@ -45,10 +45,8 @@ void Tunnel::Init(Context ctx, Config config, Transport* interface) {
     std::cout << "[INFO]: Listening on TUN (" << config.num_cores << " threads/fds)" << std::endl;
 }
 
-Tunnel::Worker::Worker(Context ctx, int fd, Queue<u32>* queue, Transport* interface) {
+Tunnel::Worker::Worker(Context ctx, int fd, Transport* interface) {
     this->fd = fd;
-    this->queue = queue;
-    this->ch = ctx.outgoing_channel;
     this->pool = ctx.incoming_pool;
     this->incoming_pool = ctx.outgoing_pool;
     this->send = interface;

@@ -44,7 +44,7 @@ void Transport::Init(Context ctx, Config config, Tunnel* interface) {
             panic("bind");
         }
 
-        workers.push_back(Worker(ctx, fd, ctx.incoming_channel->add_worker(), interface));
+        workers.push_back(Worker(ctx, fd, interface));
         auto w = &workers[i];
         threads.push_back(std::thread([w](){
             w->incoming();
@@ -54,13 +54,11 @@ void Transport::Init(Context ctx, Config config, Tunnel* interface) {
     std::cout << "[INFO]: Listening on UDP 0.0.0.0:" << config.port << " (" << config.num_cores << " threads/fds)" << std::endl;
 }
 
-Transport::Worker::Worker(Context ctx, int fd, Queue<u32>* queue, Tunnel* interface) {
+Transport::Worker::Worker(Context ctx, int fd, Tunnel* interface) {
     this->fd     = fd;
-    this->queue  = queue;
     this->pool   = ctx.outgoing_pool;
     this->incoming_pool = ctx.incoming_pool;
     this->rtable = ctx.rtable;
-    this->ch     = ctx.outgoing_channel;
     this->send   = interface;
 
     memset(&ring, 0, sizeof(ring));

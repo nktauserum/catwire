@@ -8,7 +8,6 @@
 #include "../common/models.h"
 
 #include "models/queue.h"
-#include "models/channel.h"
 #include "models/pool.h"
 #include "utils/context.hpp"
 #include "utils/config.hpp"
@@ -26,8 +25,6 @@ protected:
     void* buffers;
 
     RoutingTable* rtable;
-    Queue<u32>* queue;
-    Channel<u32>* ch;
 
     enum : u16 {
         READ,
@@ -74,7 +71,7 @@ class Transport {
         int enqueue(u32);
         void incoming();
 
-        Worker(Context, int, Queue<u32>*, Tunnel*);
+        Worker(Context, int, Tunnel*);
     };
 
     std::vector<std::thread> threads;
@@ -98,7 +95,7 @@ class Tunnel {
         void incoming();
         int enqueue(u32);
 
-        Worker(Context, int, Queue<u32>*, Transport*);
+        Worker(Context, int, Transport*);
     };
 
     std::vector<std::thread> threads;
