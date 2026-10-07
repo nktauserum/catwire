@@ -34,7 +34,7 @@ void Tunnel::Worker::incoming() {
             auto session = &rtable->table[session_idx];
             if (!session->is_active.load(std::memory_order_consume)) goto cleanup;
 
-            {
+            if (info.op == READ) {
                 u8 nonce[12] = {0};
                 u64 counter  = session->add_counter();
                 u64 bcounter = __builtin_bswap64(counter);

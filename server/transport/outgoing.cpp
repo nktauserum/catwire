@@ -1,10 +1,7 @@
 #include "../interface.hpp"
 
 #include <vector>
-#include <chrono>
 #include <liburing.h>
-
-constexpr auto max_interval = std::chrono::nanoseconds(200);
 
 int Transport::Worker::enqueue(u32 idx) {
     IncomingBuffer* b = &incoming_pool->data[idx];
