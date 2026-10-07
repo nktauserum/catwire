@@ -232,6 +232,10 @@ public:
 
 };
 
+static Context init_ctx() {
+    
+};
+
 int main(void) {
     if (sodium_init() < 0) 
         panic("failed to initialize libsodium");
@@ -244,7 +248,5 @@ int main(void) {
     Tunnel    tun;
     Transport udp;
 
-    Context ctx = { };
-    
     return 0;
 }
