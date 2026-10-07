@@ -38,6 +38,6 @@ protected:
     int entries, buffer_size;
 
 public:
-    void Incoming();
-    void Outgoing();
+    int enqueue(u32);
+    void incoming();
 };

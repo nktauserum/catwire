@@ -6,7 +6,7 @@
 #include <liburing.h>
 #include <sodium.h>
 
-void Transport::Worker::Incoming() {
+void Transport::Worker::incoming() {
     std::vector<struct io_uring_cqe*> cqes(entries*2);
 
     while (true) {
@@ -127,7 +127,7 @@ int Transport::Worker::__process_handshake(Packet* packet, u32 sz, Address addr)
     };
     memcpy(&buf->packet.payload, rtable->publicKey, crypto_kx_PUBLICKEYBYTES);
 
-    __enqueue(out_idx);
+    // enqueue(out_idx);
 
     return -1; // It's neither a placeholder nor an issue. A negative value indicates that we don't need to send anything to the Tunnel
 }

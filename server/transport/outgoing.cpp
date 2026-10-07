@@ -6,30 +6,30 @@
 
 constexpr auto max_interval = std::chrono::nanoseconds(200);
 
-void Transport::Worker::Outgoing() {
-    auto last_msg = std::chrono::steady_clock::now();
+// void Transport::Worker::Outgoing() {
+//     auto last_msg = std::chrono::steady_clock::now();
+//
+//     while (true) {
+//         auto now = std::chrono::steady_clock::now();
+//         u32* idx = queue->read();
+//         if (idx) {
+//             queue->pop();
+//             __enqueue(*idx);
+//             last_msg = now;
+//             continue;
+//         }
+//
+//
+//         if (now - last_msg >= max_interval) {
+//             queue->wait();
+//         }
+//     }
+// }
 
-    while (true) {
-        auto now = std::chrono::steady_clock::now();
-        u32* idx = queue->read();
-        if (idx) {
-            queue->pop();
-            __enqueue(*idx);
-            last_msg = now;
-            continue;
-        }
-
-
-        if (now - last_msg >= max_interval) {
-            queue->wait();
-        }
-    }
-}
-
-void Transport::Worker::__enqueue(u32 idx) {
+int Transport::Worker::enqueue(u32 idx) {
     IncomingBuffer* b = &incoming_pool->data[idx];
     struct io_uring_sqe* sqe = io_uring_get_sqe(&ring); 
-    if (!sqe) return;
+    if (!sqe) return -1;
 
     auto buf = &send_queue[b->idx];
     buf->vec = (struct iovec) {
@@ -51,4 +51,6 @@ void Transport::Worker::__enqueue(u32 idx) {
     io_uring_sqe_set_data64(sqe, b->idx);
 
     io_uring_submit(&ring); // TODO: add batching queue 
+
+    return 0;
 }

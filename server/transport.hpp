@@ -7,8 +7,8 @@
 
 #include "interface.hpp"
 #include "../common/models.h"
-#include "context.hpp"
-#include "config.hpp"
+#include "utils/context.hpp"
+#include "utils/config.hpp"
 
 class Transport {
     std::vector<std::thread> workers;
@@ -21,7 +21,7 @@ public:
         static const int buffer_size = 1500;
 
         SharedPool<OutgoingBuffer>* pool;
-        SharedPool<IncomingBuffer>* incoming_pool; // TODO: provide
+        SharedPool<IncomingBuffer>* incoming_pool;
 
         int __process_data(Packet*, u32, Address);
         int __process_handshake(Packet*, u32, Address);
@@ -32,13 +32,16 @@ public:
         } send_msg;
 
         std::vector<send_msg> send_queue;
-        void __enqueue(u32);
+
     public:
-        void Incoming();
-        void Outgoing();
+        int enqueue(u32);
+        void incoming();
 
         Worker(Context, int, Queue<u32>*);
     };
 
-    Transport(Context, Config); // TODO: move some fields to config
+    int Enqueue(u32);
+    int Init();
+
+    Transport(Context, Config); 
 };

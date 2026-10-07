@@ -44,10 +44,7 @@ Transport::Transport(Context ctx, Config config) {
 
         Worker w(ctx, fd, ctx.incoming_channel->add_worker());
         workers[i] = std::thread([&w](){
-            w.Incoming();
-        });
-        workers[++i] = std::thread([&w](){
-            w.Outgoing();
+            w.incoming();
         });
     }
 }
