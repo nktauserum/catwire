@@ -21,6 +21,7 @@ using boost::asio::ip::udp;
 #include "../common/types.h"
 #include "../common/models.h"
 #include "../common/macro.h"
+#include "../common/pool.h"
 #include "config.hpp"
 
 int open_tun(const char* ifname) {
@@ -153,7 +154,7 @@ public:
                     print_hex(nonce, 12);
                     int ret = crypto_aead_aes256gcm_decrypt_afternm(
                         out_buf->payload, &out_buf->len, nullptr,
-                        buf->packet.payload, len,
+                        buf->packet.payload, len - sizeof(Header),
                         nullptr, 0,
                         nonce, &crypto_ctx
                     );
@@ -236,7 +237,7 @@ public:
             if (e.value() != 0) 
                 std::cout << "Outgoing() failed: " << e.message() << std::endl;
             else {
-                std::cout << "Read " << len << " bytes from TUN" << std::endl;
+               std::cout << "Read " << len << " bytes from TUN" << std::endl;
                 OutgoingBuffer* buf = &outgoing_pool.data[idx];
 
                 u64 c = counter.fetch_add(1, std::memory_order_relaxed);
@@ -294,7 +295,7 @@ int main(void) {
     int tun_fd = open_tun("cw2"); // TODO: move name definition to config
     if (tun_fd < 0) {
         perror("TUN");
-        throw panic("panic: failed to initialize TUN interface");
+        panic("failed to initialize TUN interface");
     }
 
     Application client(config.server_addr, config.server_port, config.seed, tun_fd);
