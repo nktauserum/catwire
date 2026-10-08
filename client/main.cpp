@@ -121,7 +121,6 @@ public:
             endpoint, 
         [this, idx](boost::system::error_code e, std::size_t sent_len)
         {
-            std::cout << "Sent packet " << sent_len << " bytes" << std::endl;
             incoming_pool.Release(idx);
         });
     }
@@ -137,7 +136,6 @@ public:
             if (e.value() != 0) {
                 std::cout << "Incoming() failed: " << e.message() << std::endl;
             } else {
-                std::cout << "Received " << len << " bytes from UDP" << std::endl; 
                 IncomingBuffer* buf = &incoming_pool.data[idx];
 
                 switch (buf->packet.header.packetType) {
@@ -151,7 +149,6 @@ public:
 
                     std::shared_lock<std::shared_mutex> lock(mtx);
 
-                    print_hex(nonce, 12);
                     int ret = crypto_aead_aes256gcm_decrypt_afternm(
                         out_buf->payload, &out_buf->len, nullptr,
                         buf->packet.payload, len - sizeof(Header),
@@ -237,7 +234,6 @@ public:
             if (e.value() != 0) 
                 std::cout << "Outgoing() failed: " << e.message() << std::endl;
             else {
-               std::cout << "Read " << len << " bytes from TUN" << std::endl;
                 OutgoingBuffer* buf = &outgoing_pool.data[idx];
 
                 u64 c = counter.fetch_add(1, std::memory_order_relaxed);
@@ -273,7 +269,6 @@ public:
                     endpoint, 
                 [this, out_idx](boost::system::error_code e, std::size_t sent_len)
                 {
-                    std::cout << "Sent packet " << sent_len << " bytes" << std::endl;
                     incoming_pool.Release(out_idx);
                 });
             }
