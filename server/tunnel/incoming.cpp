@@ -37,7 +37,7 @@ void Tunnel::Worker::incoming() {
                 int session_idx = rtable->active(lookup_idx);
                 if (session_idx < 0) goto cleanup;
                 auto session = &rtable->table[session_idx];
-                // std::cout << "[INFO]: Outgoing packet for session " << lookup_idx << std::endl;
+                std::cout << "[INFO]: Outgoing packet for session " << lookup_idx << std::endl;
                 {
                     u8 nonce[12] = {0};
                     u64 counter  = session->add_counter();

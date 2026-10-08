@@ -81,8 +81,7 @@ private:
 public:
     Application(const char* server_addr, u16 server_port, u8* key, int tun_fd) : ctx{}, guard{boost::asio::make_work_guard(ctx)}, socket{udp::socket(ctx, udp::endpoint(udp::v4(), 0))}, tun_stream{ctx, tun_fd} {
         udp::resolver resolver(ctx);
-        udp::resolver::results_type endpoints = resolver.resolve(udp::v4(), server_addr, std::to_string(server_port));
-        endpoint = *endpoints.begin();
+        endpoint = udp::endpoint(boost::asio::ip::make_address_v4(server_addr), server_port);
 
         run_ctx = std::thread([this](){
             ctx.run();

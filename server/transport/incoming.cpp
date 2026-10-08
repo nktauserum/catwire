@@ -44,7 +44,7 @@ void Transport::Worker::incoming() {
                 Packet* packet = reinterpret_cast<Packet*>(io_uring_recvmsg_payload(out, &msg));
                 u32 sz = io_uring_recvmsg_payload_length(out, cqe->res, &msg);
 
-                // std::cout << "[INFO]: Incoming packet size " << sz << std::endl;
+                std::cout << "[INFO]: Incoming packet size " << sz << std::endl;
                 int idx;
                 switch (packet->header.packetType) {
                 case DATA: 
