@@ -118,7 +118,9 @@ Transport::Worker::Worker(Context ctx, int fd, Tunnel* interface) {
         panic("register fd");
     }
 
+    struct sockaddr_storage temp;
     memset(&msg, 0, sizeof(msg));
+    msg.msg_name = &temp;
     msg.msg_namelen = sizeof(struct sockaddr_storage);
     msg.msg_controllen = 0;
 
@@ -127,7 +129,7 @@ Transport::Worker::Worker(Context ctx, int fd, Tunnel* interface) {
         panic("cannot get sqe");
     }
 
-    io_uring_prep_recvmsg_multishot(sqe, 0, &msg, MSG_TRUNC);
+    io_uring_prep_recvmsg_multishot(sqe, 0, &msg, 0);
 
     sqe->flags |= IOSQE_FIXED_FILE;
     sqe->flags |= IOSQE_BUFFER_SELECT;
