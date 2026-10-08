@@ -1,8 +1,6 @@
 #pragma once
 
-#include "../../common/models.h"
-
-#include "../models/pool.h"
+#include "../../common/pool.h"
 #include "../models/buffer.h"
 #include "config.hpp"
 

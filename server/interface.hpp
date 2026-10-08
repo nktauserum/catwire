@@ -8,7 +8,7 @@
 #include "../common/models.h"
 
 #include "models/buffer.h"
-#include "models/pool.h"
+#include "../common/pool.h"
 #include "utils/context.hpp"
 #include "utils/config.hpp"
 
