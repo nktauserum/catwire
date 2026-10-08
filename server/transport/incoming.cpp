@@ -21,7 +21,10 @@ void Transport::Worker::incoming() {
         int count = io_uring_peek_batch_cqe(&ring, &cqes[0], entries*2);
         for (int i = 0; i < count; ++i) {
             struct io_uring_cqe* cqe = cqes[i];
-            if (cqe->res < 0) continue;
+            if (cqe->res < 0) {
+                std::cout << "[WARNING]: Transport op failed: code " << cqe->res << std::endl;
+                continue;
+            }
 
             __info info;
             memcpy(&info, &cqe->user_data, sizeof(__info));
@@ -122,7 +125,7 @@ int Transport::Worker::__process_handshake(Packet* packet, u32 sz, Address addr)
     TransportBuffer* buf = &transport_pool->data[out_idx];
 
     buf->idx    = out_idx;
-    buf->addr   = buf->addr;
+    buf->addr   = addr;
     buf->payload_len    = crypto_kx_PUBLICKEYBYTES;
     buf->packet = Packet {
         .header  = Header {
