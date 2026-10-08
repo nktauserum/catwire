@@ -88,7 +88,7 @@ Transport::Worker::Worker(Context ctx, int fd, Tunnel* interface) {
 
     buffers = mmap(NULL, entries*buffer_size, PROT_READ | PROT_WRITE,
           MAP_ANONYMOUS | MAP_PRIVATE, 0, 0);
-    if (mapped == MAP_FAILED) {
+    if (buffers == MAP_FAILED) {
         fprintf(stderr, "buf_ring mmap: %s\n", strerror(errno));
         panic("mmap failed");
     }
