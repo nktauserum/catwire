@@ -42,42 +42,42 @@ void Tunnel::Worker::incoming() {
                 u32 lookup_idx = ip_byte - 2;
                 int session_idx = rtable->active(lookup_idx);
                 if (session_idx < 0) goto cleanup;
+
                 auto session = &rtable->table[session_idx];
                 std::cout << "[INFO]: Outgoing packet for session " << lookup_idx << std::endl;
+                
+                u32 out_idx = transport_pool->Acquire();
+                TransportBuffer* out_buf = &transport_pool->data[out_idx];
+
+                u64 counter = session->counter.fetch_add(1, std::memory_order_relaxed);
+
+                out_buf->packet.header = {
+                    .packetType = DATA,
+                    .peerIndex  = lookup_idx,
+                    .counter    = counter,
+                };
+
+                randombytes_buf(out_buf->packet.header.aegis256_nonce, 32);
+
                 {
-                    u8 nonce[12] = {0};
-                    u64 counter  = session->counter.fetch_add(1, std::memory_order_relaxed);
-                    u64 bcounter = __builtin_bswap64(counter);
-                    memcpy(&nonce[4], &bcounter, sizeof(u64));
-                    
-                    u32 out_idx = transport_pool->Acquire();
-                    TransportBuffer* out_buf = &transport_pool->data[out_idx];
+                    std::shared_lock<std::shared_mutex> lock(session->mtx);
 
-                    {
-                        std::shared_lock<std::shared_mutex> lock(session->mtx);
-
-                        int res = crypto_aead_aes256gcm_encrypt_afternm(
-                            out_buf->packet.payload, &out_buf->payload_len,
-                            reinterpret_cast<u8*>(payload), sz,
-                            NULL, 0, NULL,
-                            nonce, &session->crypto_ctx
-                        );
-                        if (res < 0) {
-                            std::cout << "Error encrypt outgoing packet: ret " << res << std::endl;
-                            transport_pool->Release(out_idx);
-                            goto cleanup;
-                        }
-                        out_buf->addr = session->remote_addr;
+                    int res = crypto_aead_aegis256_encrypt(
+                        out_buf->packet.payload, &out_buf->payload_len,
+                        reinterpret_cast<u8*>(payload), sz,
+                        reinterpret_cast<u8*>(&out_buf->packet.header), static_cast<u64>(sizeof(Header)), // Header as additional data
+                        nullptr, // nsec is never used
+                        out_buf->packet.header.aegis256_nonce, session->tx_key
+                    );
+                    if (res < 0) {
+                        std::cout << "Error encrypt outgoing packet: ret " << res << std::endl;
+                        transport_pool->Release(out_idx);
+                        goto cleanup;
                     }
-
-                    out_buf->packet.header = {
-                        .packetType = DATA,
-                        .peerIndex = lookup_idx,
-                        .counter = counter,
-                    };
-
-                    send->Enqueue(out_idx);
+                    out_buf->addr = session->remote_addr;
                 }
+
+                send->Enqueue(out_idx);
             } else {
                 tunnel_pool->Release(info.bid);
             }
