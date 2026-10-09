@@ -17,11 +17,10 @@ public:
 
     int Acquire() {
         for (;;) {
-            u64 b = bitmap.load();
+            u64 b = bitmap.load(std::memory_order_relaxed);
             if (b != 0) {
                 int offset = __builtin_ctzll(b);
-                if (bitmap.compare_exchange_strong(b, b^(1ull<<offset))) return offset;
-
+                if (bitmap.compare_exchange_strong(b, b^(1ull<<offset)), std::memory_order_acquire) return offset;
                 continue;
             }
             
@@ -31,8 +30,11 @@ public:
 
     void Release(int idx) { 
         if (unlikely(idx >= 64 || idx < 0)) return;
-        bitmap.fetch_or(1ull << idx);
+        bitmap.fetch_or(1ull << idx, std::memory_order_release);
     }
 
-    SharedPool() : bitmap{static_cast<u64>(~0)}, data{reinterpret_cast<T*>(calloc(64, sizeof(T)))} {}
+    SharedPool () : bitmap{~0ULL}, data{new T[64]} {}
+    ~SharedPool() {
+        delete[] data;
+    }
 };
