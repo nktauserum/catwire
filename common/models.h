@@ -18,7 +18,7 @@ typedef struct {
 
 typedef struct {
     Header  header;
-    u8      payload[1500]; // - sizeof(Header), maybe?
+    u8      payload[sizeof(Header)+1500+16]; // - sizeof(Header), maybe?
 } __attribute__((packed)) Packet;
 
 typedef struct {

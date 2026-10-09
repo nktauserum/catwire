@@ -18,5 +18,5 @@ typedef struct {
     u64 idx;
     u64 counter;
     u64 len;
-    u8  payload[1420];
+    u8  payload[sizeof(Header)+1500+16];
 } TunnelBuffer;
