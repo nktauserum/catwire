@@ -29,9 +29,6 @@ struct Session {
 
     u32 local_addr = 0;
     Address remote_addr;
-
-    // __always_inline u64 add_counter() {
-    //     return     }
 };
 
 class RoutingTable {
