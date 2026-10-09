@@ -85,7 +85,8 @@ class Tunnel {
         SharedPool<TunnelBuffer>*    tunnel_pool;
     public: 
         void incoming();
-        int enqueue(u32);
+        int  enqueue(u32);
+        void __process_data(void*, int);
 
         Worker(Context, int, Transport*);
     };
@@ -94,7 +95,8 @@ class Tunnel {
     std::vector<Worker> workers;
     std::atomic<u32> next_worker = 0;
 public:
-    int Enqueue(u32);
+    int  Enqueue(u32);
+    void Send(void*, int);
     void Init(Context, Config, Transport*);
     void Join();
 };
