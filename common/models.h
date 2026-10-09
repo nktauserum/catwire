@@ -8,12 +8,6 @@ enum PacketTypes : u8 {
 };
 
 typedef struct {
-    Address addr;
-    char* payload;
-    size_t size;
-} UDPPacket;
-
-typedef struct {
     u8  packetType;
     u64 peerIndex;
     u64 counter;
