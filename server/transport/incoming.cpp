@@ -91,7 +91,7 @@ int Transport::Worker::__process_data(Packet* packet, u32 sz, Address addr) {
         ret = crypto_aead_aegis256_decrypt(
             buf->payload, &buf->len, nullptr,
             packet->payload, sz - sizeof(Header),
-            nullptr, 0,
+            reinterpret_cast<u8*>(&packet->header), static_cast<u64>(sizeof(Header)),
             packet->header.aegis256_nonce, session->rx_key
         );
     }
