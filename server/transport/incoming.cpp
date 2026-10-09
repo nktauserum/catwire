@@ -21,23 +21,24 @@ void Transport::Worker::incoming() {
         int count = io_uring_peek_batch_cqe(&ring, &cqes[0], entries*2);
         for (int i = 0; i < count; ++i) {
             struct io_uring_cqe* cqe = cqes[i];
-            if (cqe->res < 0) {
-                std::cout << "[WARNING]: Transport op failed: code " << cqe->res << std::endl;
-                continue;
-            }
 
             __info info;
             memcpy(&info, &cqe->user_data, sizeof(__info));
 
-            u32 idx = cqe->flags >> 16;
+            if (cqe->res < 0) {
+                std::cout << "[WARNING]: Transport op failed: code " << cqe->res << std::endl;
+                if (info.op == READ) goto cleanup;
+                continue;
+            }
 
             if (info.op == READ) {
-                struct io_uring_recvmsg_out *out = io_uring_recvmsg_validate(BUF_OFFSET(buffers, idx), cqe->res, &msg);
+                struct io_uring_recvmsg_out *out = io_uring_recvmsg_validate(BUF_OFFSET(buffers, (cqe->flags >> 16)), cqe->res, &msg);
                 if (unlikely(!out)) continue;
 
                 struct sockaddr_in* addr = reinterpret_cast<struct sockaddr_in*>(io_uring_recvmsg_name(out));
                 Packet* packet = reinterpret_cast<Packet*>(io_uring_recvmsg_payload(out, &msg));
                 u32 sz = io_uring_recvmsg_payload_length(out, cqe->res, &msg);
+                if (sz <= sizeof(Header)) goto cleanup;
 
                 std::cout << "[INFO]: Incoming packet size " << sz << std::endl;
                 int idx;
@@ -63,7 +64,7 @@ void Transport::Worker::incoming() {
             } 
 
         cleanup:
-            io_uring_buf_ring_add(buf_ring, BUF_OFFSET(buffers, idx), buffer_size, idx, io_uring_buf_ring_mask(entries), 0);
+            io_uring_buf_ring_add(buf_ring, BUF_OFFSET(buffers, (cqe->flags >> 16)), buffer_size, (cqe->flags >> 16), io_uring_buf_ring_mask(entries), 0);
         }
 
         io_uring_buf_ring_advance(buf_ring, count);

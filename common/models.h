@@ -21,7 +21,7 @@ typedef struct {
 
 typedef struct {
     Header  header;
-    u8      payload[1420+16];
+    u8      payload[1500];
 } __attribute__((packed)) Packet;
 
 typedef struct {
@@ -34,5 +34,5 @@ typedef struct {
 typedef struct {
     long long unsigned int len; // strange :)
     u64                    idx;
-    u8                     payload[65535];
+    u8                     payload[1500];
 } OutgoingBuffer;

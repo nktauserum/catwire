@@ -49,7 +49,7 @@ class Transport {
         struct msghdr msg;
 
         static const int entries = 64;
-        static const int buffer_size = 65535;
+        static const int buffer_size = 1500;
 
         SharedPool<TransportBuffer>* transport_pool;
         SharedPool<TunnelBuffer>*    tunnel_pool;
