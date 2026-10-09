@@ -19,11 +19,17 @@ void Tunnel::Worker::incoming() {
         int count = io_uring_peek_batch_cqe(&ring, &cqes[0], entries*2);
         for (int i = 0; i < count; ++i) {
             struct io_uring_cqe* cqe = cqes[i];
-            if (cqe->res < 0) continue;
-
+            
             __info info;
             memcpy(&info, &cqe->user_data, sizeof(__info));
             u32 idx = cqe->flags >> 16;
+
+            if (cqe->res < 0) {
+                std::cout << "[WARNING]: Tunnel op failed: code " << cqe->res << std::endl;
+                if (info.op == READ) goto cleanup;
+                else if (info.op == WRITE) tunnel_pool->Release(info.bid);
+                continue;
+            }
 
             if (info.op == READ) {
                 void* payload = BUF_OFFSET(buffers, idx);
@@ -40,7 +46,7 @@ void Tunnel::Worker::incoming() {
                 std::cout << "[INFO]: Outgoing packet for session " << lookup_idx << std::endl;
                 {
                     u8 nonce[12] = {0};
-                    u64 counter  = session->add_counter();
+                    u64 counter  = session->counter.fetch_add(1, std::memory_order_relaxed);
                     u64 bcounter = __builtin_bswap64(counter);
                     memcpy(&nonce[4], &bcounter, sizeof(u64));
                     

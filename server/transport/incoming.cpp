@@ -128,7 +128,7 @@ int Transport::Worker::__process_handshake(Packet* packet, u32 sz, Address addr)
         .header  = Header {
             .packetType = HANDSHAKE,
             .peerIndex  = rtable->table[sessionIndex].local_addr,
-            .counter    = rtable->table[sessionIndex].add_counter(),
+            .counter    = rtable->table[sessionIndex].counter.fetch_add(1, std::memory_order_relaxed),
         },
         .payload = {0},
     };

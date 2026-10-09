@@ -18,21 +18,20 @@
 
 struct Session {
     std::atomic<bool> is_active = false;
-    u64 counter = 0;
+    std::atomic<u64>  counter   = 0;
 
     std::shared_mutex mtx;
 
     u8 shared_key[32] = {0};
-    u8 publicKey[32] = {0};
+    u8 publicKey [32] = {0};
 
     crypto_aead_aes256gcm_state crypto_ctx;
 
     u32 local_addr = 0;
     Address remote_addr;
 
-    __always_inline u64 add_counter() {
-        return std::atomic_ref<u64>(counter).fetch_add(1, std::memory_order_relaxed);
-    }
+    // __always_inline u64 add_counter() {
+    //     return     }
 };
 
 class RoutingTable {
