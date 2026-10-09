@@ -20,7 +20,7 @@ public:
             u64 b = bitmap.load(std::memory_order_relaxed);
             if (b != 0) {
                 int offset = __builtin_ctzll(b);
-                if (bitmap.compare_exchange_strong(b, b^(1ull<<offset)), std::memory_order_acquire) return offset;
+                if (bitmap.compare_exchange_strong(b, b^(1ull<<offset), std::memory_order_acquire)) return offset;
                 continue;
             }
             
