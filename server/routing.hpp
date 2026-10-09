@@ -22,10 +22,9 @@ struct Session {
 
     std::shared_mutex mtx;
 
-    u8 shared_key[32] = {0};
-    u8 publicKey [32] = {0};
-
-    crypto_aead_aes256gcm_state crypto_ctx;
+    u8 rx_key   [32];
+    u8 tx_key   [32];
+    u8 publicKey[32];
 
     u32 local_addr = 0;
     Address remote_addr;
@@ -64,38 +63,19 @@ public:
         }
 
         auto session = &table[sessionIndex];
-
-        u8 raw_secret [32]   = {0};
-        u8 hash_args  [32*3] = {0};
-
-        if (crypto_scalarmult(raw_secret, privateKey, client_pubkey) != 0) return -1;
-
-        memcpy(hash_args,    raw_secret,    32);
-        memcpy(hash_args+32, publicKey,     32);
-        memcpy(hash_args+64, client_pubkey, 32);
-
-        sodium_memzero(raw_secret, 32);
-        
         {
             std::unique_lock<std::shared_mutex> lock(session->mtx);
 
-            int ret = crypto_generichash(
-                session->shared_key, 32, 
-                hash_args,           sizeof(hash_args),
-                nullptr,             0
-            );
-            if (ret < 0) return -1;
-
-            ret = crypto_aead_aes256gcm_beforenm(&session->crypto_ctx, session->shared_key);
-            if (ret < 0) return -1;
+            if (crypto_kx_server_session_keys(
+                session->rx_key, session->tx_key,
+                publicKey, privateKey,
+                client_pubkey
+            ) < 0) return -1;
 
             session->remote_addr = addr;
         }
 
-        sodium_memzero(hash_args, 32*3);
-
         session->is_active.store(1, std::memory_order_release);
-        
         return sessionIndex;
     } 
 
