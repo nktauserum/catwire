@@ -117,7 +117,11 @@ public:
             
             memcpy(session.publicKey, client.publicKey, 32);
             session.local_addr = client.local_addr;
-            
+           
+            if (lookup[idx] != -1) {
+                std::cout << "[WARNING]: the client #" << num_clients+1 << " have dublicated address, overwriting..." << std::endl;
+            }
+
             lookup[idx] = num_clients;
         }
 
