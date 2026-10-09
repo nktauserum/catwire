@@ -109,6 +109,7 @@ int Transport::Worker::__process_data(Packet* packet, u32 sz, Address addr) {
 
     if (((addr.sin_addr.s_addr & subnet_mask) == subnet_addr) && addr.sin_addr.s_addr != htonl(0x0A000501)) {
         send->Send(buf->payload, buf->len);
+        tunnel_pool->Release(idx);
         return -1;
     } 
 
