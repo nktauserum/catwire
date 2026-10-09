@@ -67,14 +67,14 @@ private:
     SharedPool<IncomingBuffer> incoming_pool;
     SharedPool<OutgoingBuffer> outgoing_pool;
 
-    std::atomic<u64> peerIndex = 0;
+    std::atomic<u32> peerIndex = 0;
     std::atomic<u64> counter   = 0;
 
     std::shared_mutex mtx;
-    u8 session_key[crypto_aead_aes256gcm_KEYBYTES] = {0};
-    crypto_aead_aes256gcm_state crypto_ctx;
+    u8 rx_key[32];
+    u8 tx_key[32];
 
-    u8 publicKey[crypto_kx_PUBLICKEYBYTES] = {0};
+    u8 publicKey [crypto_kx_PUBLICKEYBYTES] = {0};
     u8 privateKey[crypto_kx_SECRETKEYBYTES] = {0};
     
 public:
@@ -105,9 +105,10 @@ public:
         buf->len    = 32;
         buf->packet = Packet {
             .header  = Header {
-                .packetType = HANDSHAKE,
-                .peerIndex  = peerIndex.load(),
-                .counter    = counter.fetch_add(1),
+                .packetType     = HANDSHAKE,
+                .peerIndex      = peerIndex.load(),
+                .counter        = counter.fetch_add(1),
+                .aegis256_nonce = {0}
             },
             .payload = {0},
         };
@@ -138,20 +139,16 @@ public:
 
                 switch (buf->packet.header.packetType) {
                 case DATA: {
-                    u8 nonce[12] = {0};
-                    u64 counter = __builtin_bswap64(buf->packet.header.counter);
-                    memcpy(&nonce[4], &counter, sizeof(u64));
-
                     u32 out_idx = outgoing_pool.Acquire();
                     OutgoingBuffer* out_buf = &outgoing_pool.data[out_idx];
 
                     std::shared_lock<std::shared_mutex> lock(mtx);
 
-                    int ret = crypto_aead_aes256gcm_decrypt_afternm(
+                    int ret = crypto_aead_aegis256_decrypt(
                         out_buf->payload, &out_buf->len, nullptr,
                         buf->packet.payload, len - sizeof(Header),
-                        nullptr, 0,
-                        nonce, &crypto_ctx
+                        reinterpret_cast<u8*>(&buf->packet.header), static_cast<u64>(sizeof(Header)),
+                        buf->packet.header.aegis256_nonce, rx_key
                     );
                     if (ret < 0) {
                         std::cout << "Error decrypting incoming message: code " << ret << std::endl; 
@@ -177,29 +174,18 @@ public:
                     {
                         std::unique_lock<std::shared_mutex> lock(mtx);
 
-                        if (crypto_scalarmult(raw_secret, privateKey, buf->packet.payload) != 0) goto cleanup;
-
-                        memcpy(hash_args,    raw_secret,          32);
-                        sodium_memzero(raw_secret,                32);
-                        memcpy(hash_args+32, buf->packet.payload, 32);
-                        memcpy(hash_args+64, publicKey,           32);
-
-                        int ret = crypto_generichash(
-                            session_key, sizeof(session_key), 
-                            hash_args,   sizeof(hash_args),
-                            nullptr, 0
-                        );
-                        if (ret < 0) goto cleanup; 
-
-                        ret = crypto_aead_aes256gcm_beforenm(&crypto_ctx, session_key);
-                        if (ret < 0) goto cleanup;
+                        if(crypto_kx_client_session_keys(
+                            rx_key, tx_key,
+                            publicKey, privateKey,
+                            buf->packet.payload
+                        ) < 0) goto cleanup;
                     }
 
                     sodium_memzero(hash_args, 32*3);
 
                     puts("The shared secret was computed!");
 
-                    int peer_idx = reinterpret_cast<u8*>(&buf->packet.header.peerIndex)[3]-2;
+                    int peer_idx = ((buf->packet.header.peerIndex >> 24) & 0xFF)-2;
                     if (peer_idx < 0)
                         goto cleanup;
 
@@ -235,37 +221,36 @@ public:
                 OutgoingBuffer* buf = &outgoing_pool.data[idx];
 
                 u64 c = counter.fetch_add(1, std::memory_order_relaxed);
-                u8 nonce[12] = {0};
-                u64 bcounter = __builtin_bswap64(c);
-                memcpy(&nonce[4], &bcounter, sizeof(u64));
  
                 u32 out_idx = incoming_pool.Acquire();
                 IncomingBuffer* out_buf = &incoming_pool.data[out_idx];
 
+                out_buf->packet.header = {
+                    .packetType = DATA, 
+                    .peerIndex  = peerIndex.load(std::memory_order_relaxed),
+                    .counter    = c,
+                };
+
+                randombytes_buf(out_buf->packet.header.aegis256_nonce, 32);
+
                 {
                     std::shared_lock<std::shared_mutex> lock(mtx);
-                    int res = crypto_aead_aes256gcm_encrypt_afternm(
+                    int res = crypto_aead_aegis256_encrypt(
                         out_buf->packet.payload, &out_buf->len,
                         buf->payload, len,
-                        NULL, 0, NULL,
-                        nonce, &crypto_ctx
+                        reinterpret_cast<u8*>(&out_buf->packet.header), static_cast<u64>(sizeof(Header)), nullptr,
+                        out_buf->packet.header.aegis256_nonce, tx_key 
                     );
                     if (res < 0) {
                         incoming_pool.Release(out_idx);
                         goto cleanup;
                     }
                 }
-
-                out_buf->packet.header = {
-                    .packetType = DATA, 
-                    .peerIndex = peerIndex.load(std::memory_order_relaxed),
-                    .counter = c,
-                };
                 
                 socket.async_send_to(
                     boost::asio::buffer(&out_buf->packet, out_buf->len+sizeof(Header)), 
                     endpoint, 
-                [this, out_idx](boost::system::error_code e, std::size_t sent_len)
+                [this, out_idx](boost::system::error_code e, std::size_t)
                 {
                     incoming_pool.Release(out_idx);
                 });
