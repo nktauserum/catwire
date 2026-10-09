@@ -1,8 +1,6 @@
 #include <sodium.h>
 #include <iostream>
 
-#include "../common/macro.h"
-
 #include "utils/config.hpp"
 #include "interface.hpp"
 
