@@ -31,7 +31,7 @@ void Tunnel::Worker::incoming() {
 
                 u32 dest_ip = reinterpret_cast<struct iphdr*>(payload)->daddr;
                 u32 ip_byte = (dest_ip >> 24) & 0xFF; 
-                if (ip_byte < 2 || ip_byte > MAX_CLIENTS) goto cleanup; // TODO: check constant bounds
+                if (ip_byte < 2 || ip_byte >= MAX_CLIENTS+2) goto cleanup;
 
                 u32 lookup_idx = ip_byte - 2;
                 int session_idx = rtable->active(lookup_idx);

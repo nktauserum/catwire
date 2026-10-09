@@ -114,7 +114,7 @@ Tunnel::Worker::Worker(Context ctx, int fd, Transport* interface) {
         panic("cannot get sqe");
     }
 
-    io_uring_prep_read_multishot(sqe, 0, 0, 0, MSG_TRUNC);
+    io_uring_prep_read_multishot(sqe, 0, 0, 0, 0);
     sqe->flags |= IOSQE_FIXED_FILE;
     sqe->buf_group = 0;
 
