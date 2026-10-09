@@ -49,7 +49,7 @@ class Transport {
         struct msghdr msg;
 
         static const int entries = 64;
-        static const int buffer_size = 1500;
+        static const int buffer_size = 2000;
 
         SharedPool<TransportBuffer>* transport_pool;
         SharedPool<TunnelBuffer>*    tunnel_pool;
@@ -77,7 +77,7 @@ public:
 class Tunnel {
     class Worker final : public Interface {
         static const int entries = 64;
-        static const int buffer_size = 1500;
+        static const int buffer_size = 2000;
 
         Transport* send;
 
