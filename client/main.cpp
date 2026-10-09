@@ -11,7 +11,6 @@
 #endif
 
 #define BOOST_BEAST_HEADER_ONLY
-#include <boost/beast/core/detail/base64.hpp>
 #include <boost/asio.hpp>
 #include <sodium.h>
 
@@ -78,9 +77,10 @@ private:
     u8 privateKey[crypto_kx_SECRETKEYBYTES] = {0};
     
 public:
-    Application(const char* server_addr, u16 server_port, u8* key, int tun_fd) : ctx{}, guard{boost::asio::make_work_guard(ctx)}, socket{udp::socket(ctx, udp::endpoint(udp::v4(), 0))}, tun_stream{ctx, tun_fd} {
+    Application(std::string server_addr, u16 server_port, u8* key, int tun_fd) : ctx{}, guard{boost::asio::make_work_guard(ctx)}, socket{udp::socket(ctx, udp::endpoint(udp::v4(), 0))}, tun_stream{ctx, tun_fd} {
         udp::resolver resolver(ctx);
-        endpoint = udp::endpoint(boost::asio::ip::make_address_v4(server_addr), server_port);
+        udp::resolver::results_type endpoints = resolver.resolve(udp::v4(), server_addr, std::to_string(server_port));
+        endpoint = *endpoints.begin();
 
         run_ctx = std::thread([this](){
             ctx.run();
@@ -99,6 +99,7 @@ public:
 
     // TODO: add an eternal loop with availability check
     void Handshake() {
+        std::cout << "[INFO]: Handshake with " << endpoint << std::endl;
         u32 idx = incoming_pool.Acquire();
         IncomingBuffer* buf = &incoming_pool.data[idx];
 
@@ -268,6 +269,8 @@ public:
 };
 
 int main(void) {
+    std::cout << "[INFO]: Starting..." << std::endl;
+
     Config config = Config::load_from_file("config.ini");
 
     int tun_fd = open_tun("cw2"); // TODO: move name definition to config

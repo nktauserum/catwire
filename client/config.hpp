@@ -22,7 +22,7 @@ static std::pair<std::string, std::string> parse_field(const char* field) {
 
 struct Config {
     u8 seed[32];
-    char server_addr[16];
+    std::string server_addr;
     u16 server_port = 0;
 
     static Config load_from_file(const char* filename) {
@@ -44,8 +44,7 @@ struct Config {
             } else if (val.first == "server_port") {
                 config.server_port = handle_int(val.second);
             } else if (val.first == "server_addr") {
-                auto str = handle_string(val.second);
-                strncpy(config.server_addr, str.c_str(), str.size());
+                config.server_addr = handle_string(val.second);
             } else continue;
         }
         return config;
