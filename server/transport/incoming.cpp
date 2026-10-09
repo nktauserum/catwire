@@ -34,13 +34,8 @@ void Transport::Worker::incoming() {
             if (info.op == READ) {
                 struct io_uring_recvmsg_out *out = io_uring_recvmsg_validate(BUF_OFFSET(buffers, idx), cqe->res, &msg);
                 if (unlikely(!out)) continue;
-                if (unlikely(out->flags & MSG_TRUNC)) {
-                    io_uring_buf_ring_add(buf_ring, BUF_OFFSET(buffers, idx), buffer_size, idx, io_uring_buf_ring_mask(entries), 0);
-                    continue;
-                }
 
                 struct sockaddr_in* addr = reinterpret_cast<struct sockaddr_in*>(io_uring_recvmsg_name(out));
-                
                 Packet* packet = reinterpret_cast<Packet*>(io_uring_recvmsg_payload(out, &msg));
                 u32 sz = io_uring_recvmsg_payload_length(out, cqe->res, &msg);
 
@@ -64,6 +59,7 @@ void Transport::Worker::incoming() {
                 send->Enqueue(idx);
             } else {
                 transport_pool->Release(info.bid);
+                continue;
             } 
 
         cleanup:
