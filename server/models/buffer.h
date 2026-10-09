@@ -15,7 +15,8 @@ typedef struct {
 } TransportBuffer;
 
 typedef struct {
-    u64 len;
     u64 idx;
+    u64 counter;
+    u64 len;
     u8  payload[1420];
 } TunnelBuffer;

@@ -81,10 +81,6 @@ int Transport::Worker::__process_data(Packet* packet, u32 sz, Address addr) {
     auto session = &rtable->table[peer_idx];
     if (!session->is_active.load(std::memory_order_acquire)) return -1;
     
-    u8 nonce[12] = {0};
-    u64 bcounter = __builtin_bswap64(packet->header.counter);
-    memcpy(&nonce[4], &bcounter, sizeof(u64));
-
     u32 idx = tunnel_pool->Acquire();
     TunnelBuffer* buf = &tunnel_pool->data[idx];
 
@@ -92,11 +88,11 @@ int Transport::Worker::__process_data(Packet* packet, u32 sz, Address addr) {
     {
         std::shared_lock<std::shared_mutex> lock(session->mtx);
 
-        ret = crypto_aead_aes256gcm_decrypt_afternm(
+        ret = crypto_aead_aegis256_decrypt(
             buf->payload, &buf->len, nullptr,
             packet->payload, sz - sizeof(Header),
             nullptr, 0,
-            nonce, &session->crypto_ctx
+            packet->header.aegis256_nonce, session->rx_key
         );
     }
     if (ret < 0) {
@@ -104,6 +100,8 @@ int Transport::Worker::__process_data(Packet* packet, u32 sz, Address addr) {
         tunnel_pool->Release(idx);
         return -1;
     }
+
+    buf->counter = packet->header.counter; // will be important
 
     // TODO: update address it it has changed
     
@@ -123,14 +121,15 @@ int Transport::Worker::__process_handshake(Packet* packet, u32 sz, Address addr)
     u32 out_idx = transport_pool->Acquire();
     TransportBuffer* buf = &transport_pool->data[out_idx];
 
-    buf->idx    = out_idx;
-    buf->addr   = addr;
-    buf->payload_len    = crypto_kx_PUBLICKEYBYTES;
-    buf->packet = Packet {
+    buf->idx         = out_idx;
+    buf->addr        = addr;
+    buf->payload_len = crypto_kx_PUBLICKEYBYTES;
+    buf->packet      = Packet {
         .header  = Header {
-            .packetType = HANDSHAKE,
-            .peerIndex  = rtable->table[sessionIndex].local_addr,
-            .counter    = rtable->table[sessionIndex].counter.fetch_add(1, std::memory_order_relaxed),
+            .packetType     = HANDSHAKE,
+            .peerIndex      = rtable->table[sessionIndex].local_addr,
+            .counter        = rtable->table[sessionIndex].counter.fetch_add(1, std::memory_order_relaxed),
+            .aegis256_nonce = {0},
         },
         .payload = {0},
     };
