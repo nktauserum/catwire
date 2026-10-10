@@ -83,14 +83,9 @@ class Tunnel {
         SharedPool<TransportBuffer>* transport_pool;
         SharedPool<TunnelBuffer>*    tunnel_pool;
 
-        static const int window_size = 16;
-        int window[window_size];
-
-        std::atomic<u32> head, count = 0;
     public: 
         void incoming();
         int  enqueue(u32);
-        void flush();
 
         void __process_data(void*, int);
 
