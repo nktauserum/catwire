@@ -15,7 +15,7 @@ int RoutingTable::exists(u8* publicKey) {
     return -1;
 }
 
-int RoutingTable::Handshake(u8* client_pubkey, Address addr) {
+u32 RoutingTable::Handshake(u8* client_pubkey, Address addr) {
     int lookup_idx = exists(client_pubkey);
     if (lookup_idx < 0) {
         puts("No such session index");
@@ -41,10 +41,10 @@ int RoutingTable::Handshake(u8* client_pubkey, Address addr) {
     session->remote_addr = addr;
     session->is_active   = true;
 
-    lookup[lookup_idx].store(session_idx);
+    lookup[lookup_idx].store(session_idx, std::memory_order_release);
     session_pool.Release(old_idx);
 
-    return 0;
+    return session->local_addr;
 } 
 
 RoutingTable::RoutingTable(u8* seed, std::vector<Client>& clients) {
@@ -63,11 +63,11 @@ RoutingTable::RoutingTable(u8* seed, std::vector<Client>& clients) {
         session->local_addr = client.local_addr;
         memcpy(session->publicKey, client.publicKey, 32);
        
-        if (lookup[idx].load(std::memory_order_relaxed) != -1) {
+        if (lookup[idx].load(std::memory_order_acquire) != -1) {
             std::cout << "[WARNING]: the client #" << num_clients+1 << " have dublicated address, overwriting..." << std::endl;
         }
 
-        lookup[idx].store(session_idx);
+        lookup[idx].store(session_idx, std::memory_order_release);
     }
 
     if (crypto_kx_seed_keypair(publicKey, privateKey, seed) != 0) {

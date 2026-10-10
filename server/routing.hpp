@@ -38,6 +38,6 @@ public:
     std::array<std::atomic<int>, MAX_CLIENTS> lookup = {-1};
     u32 num_clients = 0;
 
-    int Handshake(u8* client_pubkey, Address addr);
+    u32 Handshake(u8* client_pubkey, Address addr);
     RoutingTable(u8* seed, std::vector<Client>& clients);
 };
