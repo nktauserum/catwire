@@ -48,7 +48,6 @@ void Transport::Worker::incoming() {
                 u32 sz = io_uring_recvmsg_payload_length(out, cqe->res, &msg);
                 if (sz <= sizeof(Header)) goto cleanup;
 
-                std::cout << "[INFO]: Incoming packet size " << sz << std::endl;
                 switch (packet->header.packetType) {
                 case DATA: 
                     __process_data(packet, sz, *addr);
@@ -99,7 +98,6 @@ void Transport::Worker::__process_data(Packet* packet, u32 sz, Address addr) {
             packet->header.aegis256_nonce, session->rx_key
         );
     if (ret < 0) {
-        std::cout << "Error decrypt an incoming message: code " << ret << std::endl;
         tunnel_pool->Release(idx);
         return;
     }

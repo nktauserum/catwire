@@ -54,7 +54,7 @@ int open_tun(const char* ifname) {
 class Application {
 private:
     boost::asio::io_context ctx;
-    std::thread run_ctx;
+    std::vector<std::thread> workers;
     boost::asio::executor_work_guard<boost::asio::io_context::executor_type> guard;
 
     udp::socket   socket;
@@ -82,9 +82,11 @@ public:
         udp::resolver::results_type endpoints = resolver.resolve(udp::v4(), server_addr, std::to_string(server_port));
         endpoint = *endpoints.begin();
 
-        run_ctx = std::thread([this](){
-            ctx.run();
-        });
+        for (int i = 0; i < std::thread::hardware_concurrency(); ++i) {
+            workers.push_back(std::thread([this](){
+                ctx.run();
+            }));
+        }
 
         if (sodium_init() < 0) 
             throw std::runtime_error("panic: failed to initialize libsodium");
@@ -264,7 +266,7 @@ public:
     }
 
     inline void Wait() {
-        return run_ctx.join();
+        return workers[0].join();
     }
 };
 

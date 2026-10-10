@@ -64,7 +64,6 @@ void Tunnel::Worker::__process_data(void* payload, int sz) {
         std::cout << "[INFO]: Send packet to an inactive session with idx " << session_idx << std::endl;
         return;
     }
-    std::cout << "[INFO]: Outgoing packet for session " << lookup_idx << std::endl;
     
     u32 out_idx = transport_pool->Acquire();
     TransportBuffer* out_buf = &transport_pool->data[out_idx];
