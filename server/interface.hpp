@@ -47,7 +47,6 @@ class Tunnel;
 class Transport {
     class Worker final : public Interface {
         struct msghdr msg;
-
         static const int entries = 64;
         static const int buffer_size = 2048;
 
@@ -83,9 +82,16 @@ class Tunnel {
 
         SharedPool<TransportBuffer>* transport_pool;
         SharedPool<TunnelBuffer>*    tunnel_pool;
+
+        static const int window_size = 16;
+        int window[window_size];
+
+        std::atomic<u32> head, count = 0;
     public: 
         void incoming();
         int  enqueue(u32);
+        void flush();
+
         void __process_data(void*, int);
 
         Worker(Context, int, Transport*);
