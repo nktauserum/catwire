@@ -55,8 +55,8 @@ class Transport {
 
         Tunnel* send;
 
-        int __process_data(Packet*, u32, Address);
-        int __process_handshake(Packet*, u32, Address);
+        void __process_data(Packet*, u32, Address);
+        void __process_handshake(Packet*, u32, Address);
 
     public:
         int enqueue(u32);

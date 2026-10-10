@@ -49,23 +49,19 @@ void Transport::Worker::incoming() {
                 if (sz <= sizeof(Header)) goto cleanup;
 
                 std::cout << "[INFO]: Incoming packet size " << sz << std::endl;
-                int idx;
                 switch (packet->header.packetType) {
                 case DATA: 
-                    idx = __process_data(packet, sz, *addr);
+                    __process_data(packet, sz, *addr);
                     break;
 
                 case HANDSHAKE: 
-                    idx = __process_handshake(packet, sz, *addr);
+                    __process_handshake(packet, sz, *addr);
                     break;
 
                 default:
                     goto cleanup;
                 }
 
-                if (idx < 0) goto cleanup;
-
-                send->Enqueue(idx);
             } else {
                 transport_pool->Release(info.bid);
                 continue;
@@ -80,17 +76,17 @@ void Transport::Worker::incoming() {
     }
 }
 
-int Transport::Worker::__process_data(Packet* packet, u32 sz, Address addr) {
+void Transport::Worker::__process_data(Packet* packet, u32 sz, Address addr) {
     u32 peer_idx = packet->header.peerIndex;
-    if (peer_idx >= MAX_CLIENTS) return -1; 
+    if (peer_idx >= MAX_CLIENTS) return; 
 
     int session_idx = rtable->lookup[peer_idx].load(std::memory_order_acquire);
-    if (session_idx == -1) return -1;
+    if (session_idx == -1) return;
 
     auto session = &rtable->session_pool.data[session_idx];
     if (!session->is_active) {
         std::cout << "[INFO]: Send packet to an inactive session with idx " << session_idx << std::endl;
-        return -1;
+        return;
     }
     
     u32 idx = tunnel_pool->Acquire();
@@ -105,27 +101,27 @@ int Transport::Worker::__process_data(Packet* packet, u32 sz, Address addr) {
     if (ret < 0) {
         std::cout << "Error decrypt an incoming message: code " << ret << std::endl;
         tunnel_pool->Release(idx);
-        return -1;
+        return;
     }
 
     if (((addr.sin_addr.s_addr & subnet_mask) == subnet_addr) && addr.sin_addr.s_addr != htonl(0x0A000501)) {
         send->Send(buf->payload, buf->len);
         tunnel_pool->Release(idx);
-        return -1;
+        return;
     } 
 
     buf->counter = packet->header.counter; // will be important soon
 
     // TODO: update address it it has changed
     
-    return idx;
+    send->Enqueue(idx);
 }
 
-int Transport::Worker::__process_handshake(Packet* packet, u32 sz, Address addr) {
-    if (sz != 32+sizeof(Header)) return -1;
+void Transport::Worker::__process_handshake(Packet* packet, u32 sz, Address addr) {
+    if (sz != 32+sizeof(Header)) return;
 
     int sessionIndex = rtable->Handshake(packet->payload, addr);
-    if (sessionIndex < 0) return -1;
+    if (sessionIndex < 0) return;
 
     printf("The shared secret was computed!\n");
     fflush(stdout);
@@ -149,6 +145,4 @@ int Transport::Worker::__process_handshake(Packet* packet, u32 sz, Address addr)
     memcpy(&buf->packet.payload, rtable->publicKey, crypto_kx_PUBLICKEYBYTES);
 
     enqueue(out_idx);
-
-    return -1; // It's neither a placeholder nor an issue. A negative value indicates that we don't need to send anything to the Tunnel
 }
