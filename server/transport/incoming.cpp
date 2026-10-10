@@ -84,23 +84,24 @@ int Transport::Worker::__process_data(Packet* packet, u32 sz, Address addr) {
     u32 peer_idx = packet->header.peerIndex;
     if (peer_idx >= MAX_CLIENTS) return -1; 
 
-    auto session = &rtable->table[peer_idx];
-    if (!session->is_active.load(std::memory_order_acquire)) return -1;
+    int session_idx = rtable->lookup[peer_idx].load(std::memory_order_acquire);
+    if (session_idx == -1) return -1;
+
+    auto session = &rtable->session_pool.data[session_idx];
+    if (!session->is_active) {
+        std::cout << "[INFO]: Send packet to an inactive session with idx " << session_idx << std::endl;
+        return -1;
+    }
     
     u32 idx = tunnel_pool->Acquire();
     TunnelBuffer* buf = &tunnel_pool->data[idx];
 
-    int ret;
-    {
-        std::shared_lock<std::shared_mutex> lock(session->mtx);
-
-        ret = crypto_aead_aegis256_decrypt(
+    int ret = crypto_aead_aegis256_decrypt(
             buf->payload, &buf->len, nullptr,
             packet->payload, sz - sizeof(Header),
             reinterpret_cast<u8*>(&packet->header), static_cast<u64>(sizeof(Header)),
             packet->header.aegis256_nonce, session->rx_key
         );
-    }
     if (ret < 0) {
         std::cout << "Error decrypt an incoming message: code " << ret << std::endl;
         tunnel_pool->Release(idx);
@@ -113,7 +114,7 @@ int Transport::Worker::__process_data(Packet* packet, u32 sz, Address addr) {
         return -1;
     } 
 
-    buf->counter = packet->header.counter; // will be important
+    buf->counter = packet->header.counter; // will be important soon
 
     // TODO: update address it it has changed
     
