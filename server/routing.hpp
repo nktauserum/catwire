@@ -35,7 +35,7 @@ public:
     u8 publicKey [32];
 
     SharedPool<Session> session_pool;
-    std::array<std::atomic<int>, MAX_CLIENTS> lookup = {-1};
+    std::array<std::atomic<int>, MAX_CLIENTS> lookup;
     u32 num_clients = 0;
 
     int Handshake(u8* client_pubkey, Address addr);

@@ -51,6 +51,10 @@ RoutingTable::RoutingTable(u8* seed, std::vector<Client>& clients) {
     if (clients.size() > MAX_CLIENTS)
         panic("config: too many clients. Check MAX_CLIENTS constant.");
 
+    for (auto& item : lookup) {
+        item.store(-1, std::memory_order_relaxed);
+    }
+
     for (num_clients = 0; num_clients < clients.size(); ++num_clients) {
         auto& client = clients[num_clients];
 
