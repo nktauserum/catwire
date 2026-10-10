@@ -15,7 +15,7 @@ int RoutingTable::exists(u8* publicKey) {
     return -1;
 }
 
-u32 RoutingTable::Handshake(u8* client_pubkey, Address addr) {
+int RoutingTable::Handshake(u8* client_pubkey, Address addr) {
     int lookup_idx = exists(client_pubkey);
     if (lookup_idx < 0) {
         puts("No such session index");
@@ -44,7 +44,7 @@ u32 RoutingTable::Handshake(u8* client_pubkey, Address addr) {
     lookup[lookup_idx].store(session_idx, std::memory_order_release);
     session_pool.Release(old_idx);
 
-    return session->local_addr;
+    return session_idx;
 } 
 
 RoutingTable::RoutingTable(u8* seed, std::vector<Client>& clients) {

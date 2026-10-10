@@ -29,15 +29,15 @@ struct Session {
 class RoutingTable {
 private:
     u8 privateKey[32];
-    u8 publicKey [32];
 
     int exists(u8* publicKey);
-    int active(u32 idx);
 public:
+    u8 publicKey [32];
+
     SharedPool<Session> session_pool;
     std::array<std::atomic<int>, MAX_CLIENTS> lookup = {-1};
     u32 num_clients = 0;
 
-    u32 Handshake(u8* client_pubkey, Address addr);
+    int Handshake(u8* client_pubkey, Address addr);
     RoutingTable(u8* seed, std::vector<Client>& clients);
 };

@@ -123,6 +123,8 @@ void Transport::Worker::__process_handshake(Packet* packet, u32 sz, Address addr
     int sessionIndex = rtable->Handshake(packet->payload, addr);
     if (sessionIndex < 0) return;
 
+    auto session = &rtable->session_pool.data[sessionIndex];
+
     printf("The shared secret was computed!\n");
     fflush(stdout);
 
@@ -136,8 +138,8 @@ void Transport::Worker::__process_handshake(Packet* packet, u32 sz, Address addr
     buf->packet      = Packet {
         .header  = Header {
             .packetType     = HANDSHAKE,
-            .peerIndex      = rtable->table[sessionIndex].local_addr,
-            .counter        = rtable->table[sessionIndex].counter.fetch_add(1, std::memory_order_relaxed),
+            .peerIndex      = session->local_addr,
+            .counter        = session->counter.fetch_add(1, std::memory_order_relaxed),
             .aegis256_nonce = {0},
         },
         .payload = {0},
