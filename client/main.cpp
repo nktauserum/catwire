@@ -1,8 +1,6 @@
 #include <iostream>
 
 #include <thread>
-#include <mutex>
-#include <shared_mutex>
 
 #ifdef __linux__
 #include <fcntl.h>
@@ -10,11 +8,10 @@
 #include <linux/if_tun.h>
 #endif
 
-#define BOOST_BEAST_HEADER_ONLY
-#include <boost/asio.hpp>
+#include <asio.hpp>
 #include <sodium.h>
 
-using boost::asio::ip::udp;
+using asio::ip::udp;
 
 #include "../common/types.h"
 #include "../common/models.h"
@@ -53,15 +50,15 @@ int open_tun(const char* ifname) {
 
 class Application {
 private:
-    boost::asio::io_context ctx;
-    std::vector<std::thread> workers;
-    boost::asio::executor_work_guard<boost::asio::io_context::executor_type> guard;
+    asio::thread_pool pool(4);
+    asio::io_context ctx;
+    asio::executor_work_guard<asio::io_context::executor_type> guard;
 
     udp::socket   socket;
     udp::endpoint endpoint;
 
     int tun_fd = -1;
-    boost::asio::posix::stream_descriptor tun_stream;
+    asio::posix::stream_descriptor tun_stream;
     
     SharedPool<IncomingBuffer> incoming_pool;
     SharedPool<OutgoingBuffer> outgoing_pool;
@@ -76,16 +73,15 @@ private:
     u8 privateKey[crypto_kx_SECRETKEYBYTES] = {0};
     
 public:
-    Application(std::string server_addr, u16 server_port, u8* key, int tun_fd) : ctx{}, guard{boost::asio::make_work_guard(ctx)}, socket{udp::socket(ctx, udp::endpoint(udp::v4(), 0))}, tun_stream{ctx, tun_fd} {
+    Application(std::string server_addr, u16 server_port, u8* key, int tun_fd) : socket{udp::socket(ctx, udp::endpoint(udp::v4(), 0))}, tun_stream{ctx, tun_fd} {
         udp::resolver resolver(ctx);
         udp::resolver::results_type endpoints = resolver.resolve(udp::v4(), server_addr, std::to_string(server_port));
         endpoint = *endpoints.begin();
 
-        for (int i = 0; i < std::thread::hardware_concurrency(); ++i) {
-            workers.push_back(std::thread([this](){
-                ctx.run();
-            }));
-        }
+        for (int i = 0; i < std::thread::hardware_concurrency(); ++i)
+
+            boost::asio::post(pool, [this]{
+            });
 
         if (sodium_init() < 0) 
             throw std::runtime_error("panic: failed to initialize libsodium");
@@ -118,9 +114,9 @@ public:
         memcpy(&buf->packet.payload, publicKey, 32);
 
         socket.async_send_to(
-            boost::asio::buffer(&buf->packet, buf->len+sizeof(Header)), 
+            asio::buffer(&buf->packet, buf->len+sizeof(Header)), 
             endpoint, 
-        [this, idx](boost::system::error_code e, std::size_t sent_len)
+        [this, idx](asio::error_code e, std::size_t sent_len)
         {
             incoming_pool.Release(idx);
         });
@@ -131,9 +127,9 @@ public:
         IncomingBuffer* buf = &incoming_pool.data[idx];
 
         socket.async_receive_from(
-            boost::asio::buffer(&buf->packet, sizeof(buf->packet)),
+            asio::buffer(&buf->packet, sizeof(buf->packet)),
             endpoint, // TODO: fix endpoint replacement
-        [this, idx](boost::system::error_code e, std::size_t len) {
+        [this, idx](asio::error_code e, std::size_t len) {
             if (e.value() != 0) {
                 std::cout << "Incoming() failed: " << e.message() << std::endl;
             } else {
@@ -157,8 +153,8 @@ public:
                     }
 
                     tun_stream.async_write_some(
-                        boost::asio::buffer(&out_buf->payload, out_buf->len),
-                    [this, out_idx](boost::system::error_code e, std::size_t len){
+                        asio::buffer(&out_buf->payload, out_buf->len),
+                    [this, out_idx](asio::error_code e, std::size_t len){
                         outgoing_pool.Release(out_idx); 
                     });
 
@@ -209,8 +205,8 @@ public:
         OutgoingBuffer* buf = &outgoing_pool.data[idx];
 
         tun_stream.async_read_some(
-            boost::asio::buffer(buf->payload, sizeof(buf->payload)),
-        [this, idx](const boost::system::error_code& e, std::size_t len) {
+            asio::buffer(buf->payload, sizeof(buf->payload)),
+        [this, idx](const asio::error_code& e, std::size_t len) {
             if (e.value() != 0) 
                 std::cout << "Outgoing() failed: " << e.message() << std::endl;
             else {
@@ -241,9 +237,9 @@ public:
                 }
                 
                 socket.async_send_to(
-                    boost::asio::buffer(&out_buf->packet, out_buf->len+sizeof(Header)), 
+                    asio::buffer(&out_buf->packet, out_buf->len+sizeof(Header)), 
                     endpoint, 
-                [this, out_idx](boost::system::error_code e, std::size_t)
+                [this, out_idx](asio::error_code e, std::size_t)
                 {
                     incoming_pool.Release(out_idx);
                 });
@@ -256,7 +252,7 @@ public:
     }
 
     inline void Wait() {
-        return workers[0].join();
+    
     }
 };
 
@@ -275,7 +271,9 @@ int main(void) {
 
     client.Handshake();
 
-    client.Incoming();
+    for (int i = 0; i < std::thread::hardware_concurrency()/2; ++i)
+        client.Incoming();
+
     client.Wait();
 
     return 0;
