@@ -69,7 +69,6 @@ private:
     std::atomic<u32> peerIndex = 0;
     std::atomic<u64> counter   = 0;
 
-    std::shared_mutex mtx;
     u8 rx_key[32];
     u8 tx_key[32];
 
@@ -145,8 +144,6 @@ public:
                     u32 out_idx = outgoing_pool.Acquire();
                     OutgoingBuffer* out_buf = &outgoing_pool.data[out_idx];
 
-                    std::shared_lock<std::shared_mutex> lock(mtx);
-
                     int ret = crypto_aead_aegis256_decrypt(
                         out_buf->payload, &out_buf->len, nullptr,
                         buf->packet.payload, len - sizeof(Header),
@@ -174,15 +171,11 @@ public:
                     u8 raw_secret [32]   = {0};
                     u8 hash_args  [32*3] = {0};
 
-                    {
-                        std::unique_lock<std::shared_mutex> lock(mtx);
-
-                        if(crypto_kx_client_session_keys(
-                            rx_key, tx_key,
-                            publicKey, privateKey,
-                            buf->packet.payload
-                        ) < 0) goto cleanup;
-                    }
+                    if(crypto_kx_client_session_keys(
+                        rx_key, tx_key,
+                        publicKey, privateKey,
+                        buf->packet.payload
+                    ) < 0) goto cleanup;
 
                     sodium_memzero(hash_args, 32*3);
 
@@ -236,18 +229,15 @@ public:
 
                 randombytes_buf(out_buf->packet.header.aegis256_nonce, 32);
 
-                {
-                    std::shared_lock<std::shared_mutex> lock(mtx);
-                    int res = crypto_aead_aegis256_encrypt(
-                        out_buf->packet.payload, &out_buf->len,
-                        buf->payload, len,
-                        reinterpret_cast<u8*>(&out_buf->packet.header), static_cast<u64>(sizeof(Header)), nullptr,
-                        out_buf->packet.header.aegis256_nonce, tx_key 
-                    );
-                    if (res < 0) {
-                        incoming_pool.Release(out_idx);
-                        goto cleanup;
-                    }
+                int res = crypto_aead_aegis256_encrypt(
+                    out_buf->packet.payload, &out_buf->len,
+                    buf->payload, len,
+                    reinterpret_cast<u8*>(&out_buf->packet.header), static_cast<u64>(sizeof(Header)), nullptr,
+                    out_buf->packet.header.aegis256_nonce, tx_key 
+                );
+                if (res < 0) {
+                    incoming_pool.Release(out_idx);
+                    goto cleanup;
                 }
                 
                 socket.async_send_to(
