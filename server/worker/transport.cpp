@@ -106,3 +106,36 @@ void Worker::__transport_process_handshake(Packet* packet, u32 sz, Address addr)
 
     __transport_process_outgoing(out_idx);
 }
+
+void Worker::__transport_process_outgoing(u32 idx) {
+    TransportBuffer* buf = &transport_pool.data[idx];
+    struct io_uring_sqe* sqe = io_uring_get_sqe(&ring); 
+    if (!sqe) return;
+
+    buf->vec = (struct iovec) {
+        .iov_base = reinterpret_cast<void*>(&buf->packet),
+        .iov_len  = buf->payload_len + sizeof(Header),
+    };
+
+    buf->hdr = (struct msghdr) { 
+        .msg_name       = &buf->addr,
+        .msg_namelen    = sizeof(Address),
+        .msg_iov        = &buf->vec,
+        .msg_iovlen     = 1,
+        .msg_control    = nullptr,
+        .msg_controllen = 0,
+        .msg_flags      = 0,
+    };
+
+    io_uring_prep_sendmsg(sqe, fds[0], &buf->hdr, 0);
+    __info info = {
+        .op = WRITE, 
+        .bid = static_cast<u16>(idx)
+    };
+
+    u64 i = 0;
+    memcpy(&i, &info, sizeof(u64));
+
+    io_uring_sqe_set_data64(sqe, i);
+    io_uring_submit(&ring); // TODO: add batching queue 
+}
