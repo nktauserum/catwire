@@ -37,6 +37,9 @@ class Worker {
     SharedPool<TransportBuffer> transport_pool;
     SharedPool<TunnelBuffer>    tunnel_pool;
 
+    void handle_transport(struct io_uring_cqe*);
+    void handle_tunnel(struct io_uring_cqe*);
+
 public:
     void Run();
     Worker(RoutingTable*, Config config);
