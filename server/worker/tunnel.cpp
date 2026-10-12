@@ -3,7 +3,7 @@
 #include <linux/ip.h>
 #include <sodium.h>
 
-inline void Worker::handle_tunnel(struct io_uring_cqe* cqe, __info& info) {
+void Worker::handle_tunnel(struct io_uring_cqe* cqe, __info& info) {
     __tunnel_process_incoming(BUF_OFFSET(buffers, (cqe->flags >> 16)), cqe->res);
 }
 
