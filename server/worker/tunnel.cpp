@@ -4,7 +4,11 @@
 #include <sodium.h>
 
 void Worker::handle_tunnel(struct io_uring_cqe* cqe, __info& info) {
-    __tunnel_process_incoming(BUF_OFFSET(buffers, (cqe->flags >> 16)), cqe->res);
+    if (info.op == READ) {
+        __tunnel_process_incoming(BUF_OFFSET(buffers, (cqe->flags >> 16)), cqe->res);
+    } else {
+        tunnel_pool.Release(info.bid);
+    }
 }
 
 void Worker::__tunnel_process_incoming(void* payload, int sz) {
@@ -60,6 +64,7 @@ void Worker::__tunnel_process_outgoing(u32 idx) {
     io_uring_prep_write(sqe, fds[1], reinterpret_cast<void*>(data->payload), data->len, 0);
 
     __info info = {
+        .fd  = 1,
         .op  = WRITE,
         .bid = static_cast<u16>(idx)
     };
