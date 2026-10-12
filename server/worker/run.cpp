@@ -32,10 +32,10 @@ void Worker::Run() {
 
             switch (info.fd) {
             case 0:
-                handle_transport(cqe);
+                handle_transport(cqe, info);
                 break;
             case 1:
-                handle_tunnel(cqe);
+                handle_tunnel(cqe, info);
                 break;
             default:
             }
