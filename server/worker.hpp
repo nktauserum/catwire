@@ -1,22 +1,30 @@
 #pragma once 
 
-#include <thread>
 #include <liburing.h>
 
 #include "routing.hpp"
+#include "utils/config.hpp"
 #include "../common/pool.h"
 #include "models/buffer.h"
 
+#define BUF_OFFSET(base, idx) reinterpret_cast<void*>(reinterpret_cast<unsigned char*>(base) + buffer_size*idx)
+
 class Worker {
-    std::thread t;
-    u32 fds[2];
+    int fds[2];
 
     struct io_uring ring;
     struct io_uring_buf_ring* buf_ring;
     void* buffers;
 
+    struct msghdr msg;
+
     static const int entries = 64;
     static const int buffer_size = 2048;
+
+    enum : u16 {
+        READ,
+        WRITE,
+    };
 
     struct __info {
         u32 fd;
@@ -26,11 +34,10 @@ class Worker {
 
     RoutingTable* rtable;
 
-    SharedPool<TransportBuffer>* transport_pool;
-    SharedPool<TunnelBuffer>*    tunnel_pool;
+    SharedPool<TransportBuffer> transport_pool;
+    SharedPool<TunnelBuffer>    tunnel_pool;
 
 public:
-    Worker(RoutingTable*);
+    void Run();
+    Worker(RoutingTable*, Config config);
 };
-
-
