@@ -37,9 +37,15 @@ class Worker {
     SharedPool<TransportBuffer> transport_pool;
     SharedPool<TunnelBuffer>    tunnel_pool;
 
-    void handle_transport(struct io_uring_cqe*);
-    void handle_tunnel(struct io_uring_cqe*);
+    void handle_transport(struct io_uring_cqe*, __info&);
+    void handle_tunnel(struct io_uring_cqe*, __info&);
 
+    void __transport_process_incoming(Packet*, u32, Address);
+    void __transport_process_handshake(Packet*, u32, Address);
+    void __transport_process_outgoing(u32);
+
+    void __tunnel_process_incoming(void*, int);
+    void __tunnel_process_outgoing(u32);
 public:
     void Run();
     Worker(RoutingTable*, Config config);
