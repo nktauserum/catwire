@@ -28,6 +28,7 @@ void Worker::handle_transport(struct io_uring_cqe* cqe, __info& info) {
             break;
 
         default:
+            break;
         }
 
     } else {

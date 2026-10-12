@@ -38,6 +38,7 @@ void Worker::Run() {
                 handle_tunnel(cqe, info);
                 break;
             default:
+                break;
             }
 
         cleanup:
