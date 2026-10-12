@@ -19,20 +19,6 @@ int main(void) {
 
     Config config("config.ini");
 
-    Tunnel    tun;
-    Transport udp;
-
-    Context ctx(config);
-
-    try {
-        tun.Init(ctx, config, &udp);
-        udp.Init(ctx, config, &tun);
-    } catch (std::exception& e) {
-        std::cout << "[ERROR]: exception " << e.what() << std::endl;
-        return 1;
-    }
-
-    tun.Join();
 
     return 0;
 }

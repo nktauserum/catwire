@@ -80,7 +80,7 @@ public:
 
         for (int i = 0; i < std::thread::hardware_concurrency(); ++i)
 
-            boost::asio::post(pool, [this]{
+            asio::post(pool, [this]{
             });
 
         if (sodium_init() < 0) 
