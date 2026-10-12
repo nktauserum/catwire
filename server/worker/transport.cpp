@@ -130,6 +130,7 @@ void Worker::__transport_process_outgoing(u32 idx) {
 
     io_uring_prep_sendmsg(sqe, fds[0], &buf->hdr, 0);
     __info info = {
+        .fd = 0,
         .op = WRITE, 
         .bid = static_cast<u16>(idx)
     };
