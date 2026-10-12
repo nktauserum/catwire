@@ -141,7 +141,7 @@ Worker::Worker(RoutingTable* rtable, Config config) :
             panic("cannot get sqe");
         }
 
-        io_uring_prep_recvmsg_multishot(sqe, fds[0], &msg, 0);
+        io_uring_prep_recvmsg_multishot(sqe, 0, &msg, 0);
         sqe->flags |= IOSQE_FIXED_FILE;
         sqe->flags |= IOSQE_BUFFER_SELECT;
         sqe->buf_group = 0;
@@ -163,7 +163,7 @@ Worker::Worker(RoutingTable* rtable, Config config) :
             panic("cannot get sqe");
         }
 
-        io_uring_prep_read_multishot(sqe, fds[1], 0, 0, 0);
+        io_uring_prep_read_multishot(sqe, 1, 0, 0, 0);
         sqe->flags |= IOSQE_FIXED_FILE;
         sqe->buf_group = 0;
 
