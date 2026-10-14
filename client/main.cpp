@@ -1,6 +1,7 @@
 #include <iostream>
 
 #include <thread>
+#include <memory>
 
 #ifdef __linux__
 #include <fcntl.h>
@@ -48,49 +49,71 @@ int open_tun(const char* ifname) {
 #endif
 }
 
-class Application {
-private:
-    asio::thread_pool pool(4);
-    asio::io_context ctx;
-    asio::executor_work_guard<asio::io_context::executor_type> guard;
+struct Session {
+    u8 rx_key[32];
+    u8 tx_key[32];
 
+public:
+    u32 peerIndex = 0;
+    u64 counter   = 0;
+
+    // Requires: all fields in Header are set and ready (!!). We cannot change them later - it'll break the decryption on the server side.
+    int Encrypt(IncomingBuffer* dest, OutgoingBuffer* src) {
+        return crypto_aead_aegis256_encrypt(
+            dest->packet.payload, &dest->len,
+            src->payload, src->len,
+            reinterpret_cast<u8*>(&dest->packet.header), static_cast<u64>(sizeof(Header)), nullptr,
+            dest->packet.header.aegis256_nonce, tx_key 
+        );
+    }
+
+    // Requires: IncomingBuffer::len is set in the actual incoming packet size (with Header)
+    int Decrypt(OutgoingBuffer* dest, IncomingBuffer* src) {
+        return crypto_aead_aegis256_decrypt(
+            dest->payload, &dest->len, nullptr,
+            src->packet.payload, src->len - sizeof(Header),
+            reinterpret_cast<u8*>(&src->packet.header), static_cast<u64>(sizeof(Header)),
+            src->packet.header.aegis256_nonce, rx_key
+        );
+    }
+};
+
+class Client {
+private:
+    asio::io_context ctx;
     udp::socket   socket;
     udp::endpoint endpoint;
 
     int tun_fd = -1;
     asio::posix::stream_descriptor tun_stream;
-    
+
     SharedPool<IncomingBuffer> incoming_pool;
     SharedPool<OutgoingBuffer> outgoing_pool;
 
-    std::atomic<u32> peerIndex = 0;
-    std::atomic<u64> counter   = 0;
+    u8 publicKey [crypto_kx_PUBLICKEYBYTES];
+    u8 privateKey[crypto_kx_SECRETKEYBYTES];
 
-    u8 rx_key[32];
-    u8 tx_key[32];
+    std::atomic<std::shared_ptr<Session>> session;
 
-    u8 publicKey [crypto_kx_PUBLICKEYBYTES] = {0};
-    u8 privateKey[crypto_kx_SECRETKEYBYTES] = {0};
-    
 public:
-    Application(std::string server_addr, u16 server_port, u8* key, int tun_fd) : socket{udp::socket(ctx, udp::endpoint(udp::v4(), 0))}, tun_stream{ctx, tun_fd} {
+    Client(Config& config, int tun_fd) : ctx{}, socket{udp::socket(ctx, udp::endpoint(udp::v4(), 0))}, tun_stream{ctx, tun_fd} {
+        for (int i = 0; i < std::thread::hardware_concurrency(); ++i) 
+            ctx.run();
+
+        udp::socket socket(ctx, udp::endpoint(udp::v4(), 0));
+
         udp::resolver resolver(ctx);
-        udp::resolver::results_type endpoints = resolver.resolve(udp::v4(), server_addr, std::to_string(server_port));
-        endpoint = *endpoints.begin();
-
-        for (int i = 0; i < std::thread::hardware_concurrency(); ++i)
-
-            asio::post(pool, [this]{
-            });
+        udp::resolver::results_type endpoints = resolver.resolve(udp::v4(), config.server_addr, std::to_string(config.server_port));
+        auto endpoint = *endpoints.begin();
 
         if (sodium_init() < 0) 
-            throw std::runtime_error("panic: failed to initialize libsodium");
+            panic("failed to initialize libsodium");
 
         if (!crypto_aead_aes256gcm_is_available()) 
-            throw std::runtime_error("panic: AES256-GCM is not supported by your hardware (CPU)");
+            panic("AES256-GCM is not supported by your hardware (CPU)");
 
-        if (crypto_kx_seed_keypair(publicKey, privateKey, key) != 0) {
-            throw std::runtime_error("panic: check provided private key again");
+        if (crypto_kx_seed_keypair(publicKey, privateKey, config.seed) != 0) {
+            panic("check provided private key again");
         }
     }
 
@@ -104,8 +127,8 @@ public:
         buf->packet = Packet {
             .header  = Header {
                 .packetType     = HANDSHAKE,
-                .peerIndex      = peerIndex.load(),
-                .counter        = counter.fetch_add(1),
+                .peerIndex      = 0,
+                .counter        = 0,
                 .aegis256_nonce = {0}
             },
             .payload = {0},
@@ -134,6 +157,7 @@ public:
                 std::cout << "Incoming() failed: " << e.message() << std::endl;
             } else {
                 IncomingBuffer* buf = &incoming_pool.data[idx];
+                buf->len = len;
 
                 switch (buf->packet.header.packetType) {
                 case DATA: {
@@ -213,7 +237,7 @@ public:
                 OutgoingBuffer* buf = &outgoing_pool.data[idx];
 
                 u64 c = counter.fetch_add(1, std::memory_order_relaxed);
- 
+
                 u32 out_idx = incoming_pool.Acquire();
                 IncomingBuffer* out_buf = &incoming_pool.data[out_idx];
 
@@ -235,7 +259,7 @@ public:
                     incoming_pool.Release(out_idx);
                     goto cleanup;
                 }
-                
+
                 socket.async_send_to(
                     asio::buffer(&out_buf->packet, out_buf->len+sizeof(Header)), 
                     endpoint, 
@@ -250,10 +274,6 @@ public:
             Outgoing();
         }); 
     }
-
-    inline void Wait() {
-    
-    }
 };
 
 int main(void) {
@@ -264,17 +284,8 @@ int main(void) {
     int tun_fd = open_tun("cw2"); // TODO: move name definition to config
     if (tun_fd < 0) {
         perror("TUN");
-        panic("failed to initialize TUN interface");
-    }
-
-    Application client(config.server_addr, config.server_port, config.seed, tun_fd);
-
-    client.Handshake();
-
-    for (int i = 0; i < std::thread::hardware_concurrency()/2; ++i)
-        client.Incoming();
-
-    client.Wait();
+        return 1;
+    }    
 
     return 0;
 }
