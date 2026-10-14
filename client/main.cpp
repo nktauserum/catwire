@@ -53,7 +53,6 @@ struct Session {
     u8 rx_key[32];
     u8 tx_key[32];
 
-public:
     u32 peerIndex = 0;
     u64 counter   = 0;
 
@@ -81,6 +80,8 @@ public:
 class Client {
 private:
     asio::io_context ctx;
+    std::vector<std::thread> workers;
+    asio::executor_work_guard<asio::io_context::executor_type> guard;
     udp::socket   socket;
     udp::endpoint endpoint;
 
@@ -96,15 +97,19 @@ private:
     std::atomic<std::shared_ptr<Session>> session;
 
 public:
-    Client(Config& config, int tun_fd) : ctx{}, socket{udp::socket(ctx, udp::endpoint(udp::v4(), 0))}, tun_stream{ctx, tun_fd} {
+    Client(Config& config, int tun_fd) : ctx{}, guard{asio::make_work_guard(ctx)}, socket{udp::socket(ctx, udp::endpoint(udp::v4(), 0))}, tun_stream{ctx, tun_fd} {
+        workers.reserve(std::thread::hardware_concurrency());
         for (int i = 0; i < std::thread::hardware_concurrency(); ++i) 
-            ctx.run();
+            workers.emplace_back([this](){
+                ctx.run();
+            });
+            
 
         udp::socket socket(ctx, udp::endpoint(udp::v4(), 0));
 
         udp::resolver resolver(ctx);
         udp::resolver::results_type endpoints = resolver.resolve(udp::v4(), config.server_addr, std::to_string(config.server_port));
-        auto endpoint = *endpoints.begin();
+        endpoint = *endpoints.begin();
 
         if (sodium_init() < 0) 
             panic("failed to initialize libsodium");
@@ -153,6 +158,8 @@ public:
             asio::buffer(&buf->packet, sizeof(buf->packet)),
             endpoint, // TODO: fix endpoint replacement
         [this, idx](asio::error_code e, std::size_t len) {
+            Incoming();
+
             if (e.value() != 0) {
                 std::cout << "Incoming() failed: " << e.message() << std::endl;
             } else {
@@ -164,16 +171,13 @@ public:
                     u32 out_idx = outgoing_pool.Acquire();
                     OutgoingBuffer* out_buf = &outgoing_pool.data[out_idx];
 
-                    int ret = crypto_aead_aegis256_decrypt(
-                        out_buf->payload, &out_buf->len, nullptr,
-                        buf->packet.payload, len - sizeof(Header),
-                        reinterpret_cast<u8*>(&buf->packet.header), static_cast<u64>(sizeof(Header)),
-                        buf->packet.header.aegis256_nonce, rx_key
-                    );
-                    if (ret < 0) {
-                        std::cout << "Error decrypting incoming message: code " << ret << std::endl; 
-                        outgoing_pool.Release(out_idx);
-                        goto cleanup;
+                    {
+                        int ret = session.load(std::memory_order_acquire)->Decrypt(out_buf, buf);
+                        if (ret < 0) {
+                            std::cout << "Error decrypting incoming message: code " << ret << std::endl; 
+                            outgoing_pool.Release(out_idx);
+                            goto cleanup;
+                        }
                     }
 
                     tun_stream.async_write_some(
@@ -188,16 +192,13 @@ public:
                 case HANDSHAKE: {
                     if (len != 32 + sizeof(Header)) goto cleanup;
 
-                    u8 raw_secret [32]   = {0};
-                    u8 hash_args  [32*3] = {0};
-
-                    if(crypto_kx_client_session_keys(
-                        rx_key, tx_key,
+                    auto s = std::make_shared<Session>();
+                    
+                    if (crypto_kx_client_session_keys(
+                        s->rx_key, s->tx_key,
                         publicKey, privateKey,
                         buf->packet.payload
                     ) < 0) goto cleanup;
-
-                    sodium_memzero(hash_args, 32*3);
 
                     puts("The shared secret was computed!");
 
@@ -205,9 +206,9 @@ public:
                     if (peer_idx < 0)
                         goto cleanup;
 
-                    peerIndex.store(peer_idx);
-
-                    Outgoing();
+                    s->peerIndex = peer_idx;
+                
+                    session.store(s, std::memory_order_release);
 
                     break;
                 }
@@ -220,7 +221,6 @@ public:
 
         cleanup:
             incoming_pool.Release(idx);
-            Incoming();
         });
     }
 
@@ -231,31 +231,30 @@ public:
         tun_stream.async_read_some(
             asio::buffer(buf->payload, sizeof(buf->payload)),
         [this, idx](const asio::error_code& e, std::size_t len) {
+            Outgoing();
+
             if (e.value() != 0) 
                 std::cout << "Outgoing() failed: " << e.message() << std::endl;
             else {
                 OutgoingBuffer* buf = &outgoing_pool.data[idx];
+                buf->len = len;
 
-                u64 c = counter.fetch_add(1, std::memory_order_relaxed);
+                auto s = session.load(std::memory_order_acquire);
+                u64 c = s->counter++;
 
                 u32 out_idx = incoming_pool.Acquire();
                 IncomingBuffer* out_buf = &incoming_pool.data[out_idx];
 
                 out_buf->packet.header = {
                     .packetType = DATA, 
-                    .peerIndex  = peerIndex.load(std::memory_order_relaxed),
+                    .peerIndex  = s->peerIndex,
                     .counter    = c,
                 };
 
                 randombytes_buf(out_buf->packet.header.aegis256_nonce, 32);
 
-                int res = crypto_aead_aegis256_encrypt(
-                    out_buf->packet.payload, &out_buf->len,
-                    buf->payload, len,
-                    reinterpret_cast<u8*>(&out_buf->packet.header), static_cast<u64>(sizeof(Header)), nullptr,
-                    out_buf->packet.header.aegis256_nonce, tx_key 
-                );
-                if (res < 0) {
+                int ret = s->Encrypt(out_buf, buf);
+                if (ret < 0) {
                     incoming_pool.Release(out_idx);
                     goto cleanup;
                 }
@@ -271,8 +270,11 @@ public:
 
         cleanup:
             outgoing_pool.Release(idx);
-            Outgoing();
         }); 
+    }
+
+    void Wait() {
+        workers[0].join();
     }
 };
 
@@ -285,7 +287,15 @@ int main(void) {
     if (tun_fd < 0) {
         perror("TUN");
         return 1;
-    }    
+    }
+
+    Client app(config, tun_fd);
+
+    app.Handshake();
+    app.Incoming();
+    app.Outgoing();
+
+    app.Wait();
 
     return 0;
 }
