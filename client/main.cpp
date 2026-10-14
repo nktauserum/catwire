@@ -2,11 +2,14 @@
 
 #include <thread>
 #include <memory>
+#include <cstring>
+#include <cstdio>
 
 #ifdef __linux__
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <linux/if_tun.h>
+#include <unistd.h>
 #endif
 
 #include <asio.hpp>
@@ -172,7 +175,10 @@ public:
                     OutgoingBuffer* out_buf = &outgoing_pool.data[out_idx];
 
                     {
-                        int ret = session.load(std::memory_order_acquire)->Decrypt(out_buf, buf);
+                        auto s = session.load(std::memory_order_acquire);
+                        if (!s) goto cleanup;
+
+                        int ret = s->Decrypt(out_buf, buf);
                         if (ret < 0) {
                             std::cout << "Error decrypting incoming message: code " << ret << std::endl; 
                             outgoing_pool.Release(out_idx);
@@ -240,7 +246,7 @@ public:
                 buf->len = len;
 
                 auto s = session.load(std::memory_order_acquire);
-                u64 c = s->counter++;
+                u64 c = std::atomic_ref<u64>(s->counter).fetch_add(1, std::memory_order_relaxed);
 
                 u32 out_idx = incoming_pool.Acquire();
                 IncomingBuffer* out_buf = &incoming_pool.data[out_idx];
