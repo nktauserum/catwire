@@ -101,13 +101,6 @@ private:
 
 public:
     Client(Config& config, int tun_fd) : ctx{}, guard{asio::make_work_guard(ctx)}, socket{udp::socket(ctx, udp::endpoint(udp::v4(), 0))}, tun_stream{ctx, tun_fd} {
-        workers.reserve(std::thread::hardware_concurrency());
-        for (int i = 0; i < std::thread::hardware_concurrency(); ++i) 
-            workers.emplace_back([this](){
-                ctx.run();
-            });
-            
-
         udp::socket socket(ctx, udp::endpoint(udp::v4(), 0));
 
         udp::resolver resolver(ctx);
@@ -123,6 +116,13 @@ public:
         if (crypto_kx_seed_keypair(publicKey, privateKey, config.seed) != 0) {
             panic("check provided private key again");
         }
+
+        workers.reserve(4);
+        for (int i = 0; i < 4; ++i) 
+            workers.emplace_back([this](){
+                ctx.run();
+            });
+
     }
 
     // TODO: add an eternal loop with availability check
@@ -161,11 +161,11 @@ public:
             asio::buffer(&buf->packet, sizeof(buf->packet)),
             endpoint, // TODO: fix endpoint replacement
         [this, idx](asio::error_code e, std::size_t len) {
-            Incoming();
-
             if (e.value() != 0) {
                 std::cout << "Incoming() failed: " << e.message() << std::endl;
             } else {
+                Incoming();
+
                 IncomingBuffer* buf = &incoming_pool.data[idx];
                 buf->len = len;
 
@@ -237,11 +237,11 @@ public:
         tun_stream.async_read_some(
             asio::buffer(buf->payload, sizeof(buf->payload)),
         [this, idx](const asio::error_code& e, std::size_t len) {
-            Outgoing();
-
             if (e.value() != 0) 
                 std::cout << "Outgoing() failed: " << e.message() << std::endl;
             else {
+                Outgoing();
+
                 OutgoingBuffer* buf = &outgoing_pool.data[idx];
                 buf->len = len;
 
