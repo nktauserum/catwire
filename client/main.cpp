@@ -245,24 +245,26 @@ public:
                 OutgoingBuffer* buf = &outgoing_pool.data[idx];
                 buf->len = len;
 
-                auto s = session.load(std::memory_order_acquire);
-                u64 c = std::atomic_ref<u64>(s->counter).fetch_add(1, std::memory_order_relaxed);
-
                 u32 out_idx = incoming_pool.Acquire();
                 IncomingBuffer* out_buf = &incoming_pool.data[out_idx];
 
-                out_buf->packet.header = {
-                    .packetType = DATA, 
-                    .peerIndex  = s->peerIndex,
-                    .counter    = c,
-                };
+                {
+                    auto s = session.load(std::memory_order_acquire);
+                    u64 c = std::atomic_ref<u64>(s->counter).fetch_add(1, std::memory_order_relaxed);
 
-                randombytes_buf(out_buf->packet.header.aegis256_nonce, 32);
+                    out_buf->packet.header = {
+                        .packetType = DATA, 
+                        .peerIndex  = s->peerIndex,
+                        .counter    = c,
+                    };
 
-                int ret = s->Encrypt(out_buf, buf);
-                if (ret < 0) {
-                    incoming_pool.Release(out_idx);
-                    goto cleanup;
+                    randombytes_buf(out_buf->packet.header.aegis256_nonce, 32);
+
+                    int ret = s->Encrypt(out_buf, buf);
+                    if (ret < 0) {
+                        incoming_pool.Release(out_idx);
+                        goto cleanup;
+                    }
                 }
 
                 socket.async_send_to(
