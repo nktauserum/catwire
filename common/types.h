@@ -1,6 +1,6 @@
 #pragma once
 
-#include <cstdint>
+#include <stdint.h>
 #include <netinet/in.h>
 
 typedef uint8_t u8;
