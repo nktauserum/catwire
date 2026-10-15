@@ -1,4 +1,5 @@
 #include "tun.h"
+#include "udp.h"
 
 #include "config.h"
 #include "logs.h"
@@ -20,5 +21,8 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-
+    int udp_fd = udp_open();
+    if (udp_fd < 0) {
+        return 1;
+    }
 }
