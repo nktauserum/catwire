@@ -35,7 +35,7 @@ int main(int argc, char *argv[]) {
 
     log_info("UDP-socket    opened successfully");
 
-    Pool* pool = calloc(sizeof(Pool), 1); // you can allocate it on the stack if you want
+    Pool* pool = calloc(1, sizeof(Pool)); // you can allocate it on the stack if you want
     if (!pool) {
         log_error("No memory available for buffer pool");
         return 1;

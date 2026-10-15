@@ -4,7 +4,7 @@
 
 int channel_init(Channel* ch, size_t capacity) {
     ch->capacity = capacity;
-    ch->queues   = calloc(sizeof(Queue), capacity);
+    ch->queues   = calloc(capacity, sizeof(Queue));
     if (!ch->queues) return -1;
 
     for (int i = 0; i < capacity; ++i)
