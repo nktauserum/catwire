@@ -8,7 +8,7 @@ SRC = $(shell find . -name "*.c" | sed 's|^\./||')
 OBJ = $(addprefix $(BUILD_DIR)/, $(SRC:.c=.o))
 TARGET = $(BUILD_DIR)/cl
 
-.PHONY: all clean run release
+.PHONY: all clean release
 
 all: CFLAGS = $(CFLAGS_DEBUG)
 all: $(TARGET)
@@ -23,9 +23,6 @@ $(TARGET): $(OBJ)
 $(BUILD_DIR)/%.o: %.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
-
-run: all
-	./$(TARGET)
 
 clean:
 	rm -rf $(BUILD_DIR)
