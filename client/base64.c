@@ -1,8 +1,5 @@
 #include "base64.h"
 
-static uint8_t char_table[64] =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-
 size_t base64_decoded_len(size_t length) { return length * 3 / 4; }
 
 static uint8_t lookupB64(uint8_t c) {

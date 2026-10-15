@@ -1,28 +1,28 @@
-CXX = g++
-CXXFLAGS_DEBUG = -std=c++23 -Wall -Wextra -pedantic -g
-CXXFLAGS_RELEASE = -std=c++23 -O3 -march=native -mtune=native -flto -DNDEBUG
+CC = gcc
+CFLAGS_DEBUG = -Wall -Wextra -pedantic -g
+CFLAGS_RELEASE = -O3 -march=native -mtune=native -flto -DNDEBUG
 LIBS = -lsodium
 BUILD_DIR = build
 
-SRC = $(shell find . -name "*.cpp" | sed 's|^\./||')
-OBJ = $(addprefix $(BUILD_DIR)/, $(SRC:.cpp=.o))
+SRC = $(shell find . -name "*.c" | sed 's|^\./||')
+OBJ = $(addprefix $(BUILD_DIR)/, $(SRC:.c=.o))
 TARGET = $(BUILD_DIR)/cl
 
 .PHONY: all clean run release
 
-all: CXXFLAGS = $(CXXFLAGS_DEBUG)
+all: CFLAGS = $(CFLAGS_DEBUG)
 all: $(TARGET)
 
-release: CXXFLAGS = $(CXXFLAGS_RELEASE)
+release: CFLAGS = $(CFLAGS_RELEASE)
 release: $(TARGET)
 
 $(TARGET): $(OBJ)
 	@mkdir -p $(dir $@)
-	$(CXX) $(CXXFLAGS) -o $@ $^ $(LIBS)
+	$(CC) $(CFLAGS) -o $@ $^ $(LIBS)
 
-$(BUILD_DIR)/%.o: %.cpp
+$(BUILD_DIR)/%.o: %.c
 	@mkdir -p $(dir $@)
-	$(CXX) $(CXXFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) -c $< -o $@
 
 run: all
 	./$(TARGET)
