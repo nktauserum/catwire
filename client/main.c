@@ -5,12 +5,11 @@
 
 #include "config.h"
 #include "logs.h"
+#include "pool.h"
 
 #include <sys/epoll.h>
 
 static const char* tun_name = "cw2";
-
-
 
 int main(int argc, char *argv[]) {
     log_info("Starting...");
@@ -36,6 +35,13 @@ int main(int argc, char *argv[]) {
 
     log_info("UDP-socket    opened successfully");
 
+    Pool* pool = calloc(sizeof(Pool), 1); // you can allocate it on the stack if you want
+    if (!pool) {
+        log_error("No memory available for buffer pool");
+        return 1;
+    }
+    pool_init(pool);
+
     int epoll_fd = epoll_create1(0);
     struct epoll_event ev = {.events = EPOLLIN};
 
@@ -58,6 +64,15 @@ int main(int argc, char *argv[]) {
         for (int i = 0; i < n; ++i) {
             if (events[i].data.fd == tun_fd) {
             } else if (events[i].data.fd == udp_fd) {
+                u32 idx = pool_acquire(pool); 
+                Buffer* buf = &pool->data[idx];
+
+                socklen_t addr_len = (socklen_t)sizeof(buf->addr);
+                ssize_t n = recvfrom(udp_fd, buf->payload, sizeof(buf->payload), 0, (struct sockaddr*)&buf->addr, &addr_len);
+                if (n < 0) {
+                    pool_release(pool, idx);
+                    continue;
+                }
             } else continue; // add graceful shutdown
         }
     }

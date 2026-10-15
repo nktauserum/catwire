@@ -10,7 +10,7 @@ void pool_init(Pool* pool) {
     pool->bitmap = ~0ull;
 }
 
-int pool_acquire(Pool* pool) {
+u32 pool_acquire(Pool* pool) {
     for (;;) {
         u64 b = atomic_load_explicit(&pool->bitmap, memory_order_relaxed);
         if (b != 0) {

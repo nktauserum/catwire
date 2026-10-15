@@ -11,6 +11,6 @@ typedef struct {
 } Pool;
 
 void pool_init(Pool*);
-int pool_acquire(Pool*);
+u32 pool_acquire(Pool*);
 void pool_release(Pool*, u32);
 
