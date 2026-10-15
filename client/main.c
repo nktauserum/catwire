@@ -1,8 +1,12 @@
+#include <stdio.h>
+
 #include "tun.h"
 #include "udp.h"
 
 #include "config.h"
 #include "logs.h"
+
+#include <sys/epoll.h>
 
 static const char* tun_name = "cw2";
 
@@ -29,4 +33,19 @@ int main(int argc, char *argv[]) {
     }
 
     log_info("UDP-socket    opened successfully");
+
+    int epoll_fd = epoll_create1(0);
+    struct epoll_event ev = {.events = EPOLLIN};
+
+    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, tun_fd, &ev) < 0) {
+        perror("epoll_ctl");
+        log_error("epoll_ctl(): error adding TUN fd");
+        return 1;
+    }
+
+    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, udp_fd, &ev) < 0) {
+        perror("epoll_ctl");
+        log_error("epoll_ctl(): error adding UDP fd");
+        return 1;
+    }
 }
