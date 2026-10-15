@@ -7,6 +7,9 @@
 // server_addr handler
 #include <arpa/inet.h>
 
+// seed handler
+#include "base64.h"
+
 int config_parse(Config* config, const char* filename) {
     FILE* file = fopen(filename, "r");
     if (!file) return -1;
@@ -22,7 +25,9 @@ int config_parse(Config* config, const char* filename) {
         
         size_t key_len = separator - line;
         if (strncmp(line, "seed", key_len) == 0) {
-             
+            size_t value_len = len - key_len - 1;
+            if (base64_decoded_len(value_len) != 32) return -1; // log ERROR
+            base64_decode(config->seed, separator+1, value_len);
         } else if (strncmp(line, "server_addr", key_len) == 0) {
             if (inet_pton(AF_INET, separator+1, &config->server_addr) != 1) return -1; // log ERROR
         } else if (strncmp(line, "server_port", key_len) == 0) {
