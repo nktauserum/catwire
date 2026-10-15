@@ -48,4 +48,15 @@ int main(int argc, char *argv[]) {
         log_error("epoll_ctl(): error adding UDP fd");
         return 1;
     }
+
+    while (1) {
+        struct epoll_event events[64];
+        int n = epoll_wait(epoll_fd, events, 64, -1);
+
+        for (int i = 0; i < n; ++i) {
+            if (events[i].data.fd == tun_fd) {
+            } else if (events[i].data.fd == udp_fd) {
+            } else continue; // add graceful shutdown
+        }
+    }
 }
