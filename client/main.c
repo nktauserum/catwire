@@ -6,9 +6,11 @@
 #include "config.h"
 #include "logs.h"
 #include "pool.h"
+#include "channel.h"
 
 #include <sys/epoll.h>
 
+#define WORKERS_COUNT 4
 static const char* tun_name = "cw2";
 
 int main(int argc, char *argv[]) {
@@ -42,6 +44,14 @@ int main(int argc, char *argv[]) {
     }
     pool_init(pool);
 
+    Channel ch;
+    if (channel_init(&ch, WORKERS_COUNT) < 0) {
+        log_error("Init channel");
+        return 1;
+    }
+
+    // start workers here
+
     int epoll_fd = epoll_create1(0);
     struct epoll_event ev = {.events = EPOLLIN};
 
@@ -73,6 +83,8 @@ int main(int argc, char *argv[]) {
                     pool_release(pool, idx);
                     continue;
                 }
+
+                channel_push(&ch, idx);
             } else continue; // add graceful shutdown
         }
     }
