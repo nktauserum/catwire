@@ -21,8 +21,12 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
+    log_info("TUN-interface opened successfully");
+
     int udp_fd = udp_open();
     if (udp_fd < 0) {
         return 1;
     }
+
+    log_info("UDP-socket    opened successfully");
 }
