@@ -33,7 +33,7 @@ int config_parse(Config* config, const char* filename) {
             return -1;
         }
         
-        size_t key_len = separator - line;
+        const size_t key_len = separator - line;
         if (strncmp(line, "seed", key_len) == 0) {
             size_t value_len = len - key_len - 4; // somehow it works
             // printf("len(%lu): %.*s\n", value_len, (int)value_len, separator+2);
@@ -53,6 +53,7 @@ int config_parse(Config* config, const char* filename) {
 
             char addr_buf[16];
             strncpy(addr_buf, separator+2, value_len);
+            addr_buf[value_len] = '\0';
 
             if (inet_pton(AF_INET, addr_buf, &config->server_addr) != 1) {
                 log_error("config_parse(): server_addr: parsing error");
