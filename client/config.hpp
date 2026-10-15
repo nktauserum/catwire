@@ -6,6 +6,7 @@
 #include <boost/beast/core/detail/base64.hpp>
 
 #include "../common/types.h"
+#include "../common/macro.h"
 
 static std::pair<std::string, std::string> parse_field(const char* field) {
     std::string s;
@@ -40,6 +41,8 @@ struct Config {
 
             if (val.first == "seed") {         
                 auto key_s = handle_string(val.second);
+                if (key_s.size() != 46)
+                    panic("seed string have wrong size");
                 boost::beast::detail::base64::decode(&config.seed, key_s.c_str(), key_s.size());
             } else if (val.first == "server_port") {
                 config.server_port = handle_int(val.second);
