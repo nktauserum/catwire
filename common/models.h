@@ -21,15 +21,3 @@ typedef struct {
     u8      payload[sizeof(Header)+1500+16]; // - sizeof(Header), maybe?
 } __attribute__((packed)) Packet;
 
-typedef struct {
-    u64                    idx;
-    Address                addr;
-    long long unsigned int len;
-    Packet                 packet;
-} IncomingBuffer;
-
-typedef struct {
-    long long unsigned int len; // strange :)
-    u64                    idx;
-    u8                     payload[1500];
-} OutgoingBuffer;
