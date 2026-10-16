@@ -48,5 +48,5 @@ class Worker {
     void __tunnel_process_outgoing(u32);
 public:
     void Run();
-    Worker(RoutingTable*, Config config);
+    Worker(RoutingTable*, Config config, int udp_fd);
 };

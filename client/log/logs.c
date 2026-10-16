@@ -7,8 +7,8 @@ static void log_str(const char* str) {
 }
 
 void log_info(const char* str) {
-    printf("[INFO]: ");
-    log_str(str);
+    // printf("[INFO]: ");
+    // log_str(str);
 }
 
 void log_warning(const char* str) {

@@ -1,7 +1,5 @@
 #include "worker.h"
 
-#include <stdio.h>
-
 #include "../interface/udp.h"
 #include "../log/logs.h"
 #include "../../common/models.h"
@@ -32,6 +30,4 @@ void worker_process_transmit(worker_ctx* ctx, Buffer* buf) {
     }
 
     udp_send(ctx->udp_fd, dest.payload, sizeof(Header)+dest.len, ctx->session.remoteAddr);
-
-    printf("[INFO]: transmit: sent %lu bytes\n", dest.len+sizeof(Header));
 }

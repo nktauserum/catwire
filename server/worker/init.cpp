@@ -15,42 +15,12 @@
 
 static const char* ifname = "cw0";
 
-Worker::Worker(RoutingTable* rtable, Config config) : 
+Worker::Worker(RoutingTable* rtable, Config config, int udp_fd) : 
     rtable{rtable},
     tunnel_pool{SharedPool<TunnelBuffer>()},
-    transport_pool{SharedPool<TransportBuffer>()}
+    transport_pool{SharedPool<TransportBuffer>()},
+    fds{udp_fd, 0}
 {
-    {
-        struct sockaddr_in addr;
-        memset(&addr, 0, sizeof(addr));
-        addr.sin_family = AF_INET;
-        addr.sin_addr.s_addr = htonl(INADDR_ANY);
-        addr.sin_port = htons(config.port);
-
-        int opt = 1;
-
-        fds[0] = socket(AF_INET, SOCK_DGRAM, 0);
-        if (fds[0] < 0) {
-            perror("UDP socket");
-            panic("create UDP socket");
-        }
-
-        if (setsockopt(fds[0], SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt)) < 0) {
-            perror("SO_REUSEPORT");
-            panic("setsockopt: re-use port");
-        }
-
-        if (setsockopt(fds[0], SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
-            perror("SO_REUSEADDR");
-            panic("setsockopt: re-use addr");
-        }
-
-        if (bind(fds[0], (struct sockaddr*)&addr, sizeof(addr)) < 0) {
-            perror("bind");
-            panic("bind");
-        }
-    }
-
     {
         struct ifreq ifr = {0};
         ifr.ifr_flags = IFF_TUN | IFF_NO_PI | IFF_MULTI_QUEUE;
