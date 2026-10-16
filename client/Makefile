@@ -1,6 +1,6 @@
 CC = gcc
 CFLAGS_DEBUG = --std=c23 -Wall -Wextra -pedantic -g
-CFLAGS_RELEASE = --std=c23 -O3 -march=native -mtune=native -flto -DNDEBUG
+CFLAGS_RELEASE = --std=c23 -O3 -march=native -mtune=native -flto -DNDEBUG -static
 LIBS = -lsodium
 BUILD_DIR = build
 
