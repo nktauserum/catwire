@@ -4,10 +4,12 @@
 
 #include "../models/channel.h"
 #include "../models/pool.h"
+#include "../session/session.h"
 
 typedef struct {
     Channel* ch;
     Pool*    pool;
+    Session  session;
 
     int udp_fd, tun_fd;
 } worker_ctx;

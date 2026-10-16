@@ -11,6 +11,9 @@ typedef struct {
     u8 rx_key[32];
     u8 tx_key[32];
 
+    u8 privateKey[32];
+    u8 publicKey [32];
+
     Address remoteAddr;
     u32     peerIndex;
     u64     counter;
