@@ -8,7 +8,6 @@ typedef enum : int {
 } Origin;
 
 typedef struct {
-    u64     idx;
     size_t  len;
     Origin  origin;
     Address addr;

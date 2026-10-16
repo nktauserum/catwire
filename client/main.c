@@ -79,7 +79,6 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    u64 counter = 0;
     struct epoll_event events[64];
     while (1) {
         int ev_n = epoll_wait(epoll_fd, events, 64, -1);
@@ -99,7 +98,6 @@ int main(int argc, char *argv[]) {
 
                 buf->len = n;
                 buf->origin = Receive;
-                buf->idx = counter++;
 
                 channel_push(&ch, idx);
             } else continue; // add graceful shutdown
