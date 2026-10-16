@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <sys/epoll.h>
 #include <pthread.h>
+#include <unistd.h>
 
 #include "interface/tun.h"
 #include "interface/udp.h"
@@ -93,15 +94,20 @@ int main(int argc, char *argv[]) {
         pthread_create(&workers[i], NULL, worker_init, (void*)&ctx);
 
     int epoll_fd = epoll_create1(0);
-    struct epoll_event ev = {.events = EPOLLIN};
 
-    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, tun_fd, &ev) < 0) {
+
+    struct epoll_event ev = {0};
+    ev.events = EPOLLIN;
+
+    ev.data.fd = tun_fd;
+    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, tun_fd, &ev) == -1) {
         perror("epoll_ctl");
         log_error("epoll_ctl(): error adding TUN fd");
         return 1;
     }
 
-    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, udp_fd, &ev) < 0) {
+    ev.data.fd = udp_fd;
+    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, udp_fd, &ev) == -1) {
         perror("epoll_ctl");
         log_error("epoll_ctl(): error adding UDP fd");
         return 1;
@@ -113,6 +119,19 @@ int main(int argc, char *argv[]) {
 
         for (int i = 0; i < ev_n; ++i) {
             if (events[i].data.fd == tun_fd) {
+                u32 idx = pool_acquire(pool); 
+                Buffer* buf = &pool->data[idx];
+
+                ssize_t n = read(tun_fd, buf->payload, sizeof(buf->payload));
+                if (n < 0) {
+                    pool_release(pool, idx);
+                    continue;
+                }
+
+                buf->len = n;
+                buf->origin = Transmit;
+
+                channel_push(&ch, idx);
             } else if (events[i].data.fd == udp_fd) {
                 u32 idx = pool_acquire(pool); 
                 Buffer* buf = &pool->data[idx];

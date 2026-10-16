@@ -3,11 +3,14 @@
 #include <string.h>
 
 #include "../interface/udp.h"
+#include "../log/logs.h"
 #include "../../common/models.h"
 
 void* worker_init(void* ctx_ptr) {
     worker_ctx* ctx = ctx_ptr;
     Queue* q = queue_acquire(ctx->ch);
+
+    log_info("Worker started");
 
     worker_start(ctx, q);
     

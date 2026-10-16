@@ -21,7 +21,7 @@ static inline void __handle_data(worker_ctx* ctx, Packet* packet, size_t len) {
 }
 
 static inline void __handle_handshake(worker_ctx* ctx, Packet* packet, size_t len) {
-    if (len != 32 + sizeof(Header)) return;
+    if (len != 32) return;
     if (session_available(&ctx->session)) return;
 
     if (crypto_kx_client_session_keys(
@@ -41,7 +41,7 @@ static inline void __handle_handshake(worker_ctx* ctx, Packet* packet, size_t le
 }
 
 void worker_process_receive(worker_ctx* ctx, Buffer* buf) {
-    if (buf->len + 1 < sizeof(Header)) return;
+    if (buf->len <= sizeof(Header)) return;
 
     Packet* packet = (Packet*)buf->payload;
     size_t len = buf->len - sizeof(Header);
