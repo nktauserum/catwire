@@ -1,5 +1,10 @@
 #include "worker.h"
 
+#include <string.h>
+
+#include "../interface/udp.h"
+#include "../../common/models.h"
+
 void* worker_init(void* ctx_ptr) {
     worker_ctx* ctx = ctx_ptr;
     Queue* q = queue_acquire(ctx->ch);
@@ -37,4 +42,19 @@ void worker_start(worker_ctx* ctx, Queue* q) {
 
         pool_release(ctx->pool, idx);
     }
+}
+
+void worker_handshake(worker_ctx* ctx) {
+    Buffer buf = {0};
+    Packet* packet = (Packet*)&buf.payload;
+
+    packet->header = (Header) {
+        .packetType = HANDSHAKE,
+        .peerIndex = 0,
+        .counter = 0,
+        .aegis256_nonce = {0}
+    };
+    memcpy(packet->payload, ctx->session.publicKey, 32);
+
+    udp_send(ctx->udp_fd, (const u8*)&buf.payload, 32+sizeof(Header), ctx->session.remoteAddr);
 }

@@ -80,6 +80,8 @@ int main(int argc, char *argv[]) {
         .session = session,
     };
 
+    worker_handshake(&ctx);
+
     pthread_t workers[WORKERS_COUNT];
     for (int i = 0; i < WORKERS_COUNT; ++i) 
         pthread_create(&workers[i], NULL, worker_init, (void*)&ctx);
