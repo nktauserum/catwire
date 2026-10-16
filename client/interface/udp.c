@@ -30,3 +30,7 @@ int udp_open() {
 
     return fd;
 }
+
+int udp_send(int fd, const u8* src, size_t len, Address addr) {
+    return sendto(fd, src, len, 0, (struct sockaddr*)&addr, sizeof(Address));
+}

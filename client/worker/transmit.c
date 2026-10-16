@@ -1,5 +1,6 @@
 #include "worker.h"
 
+#include "../interface/udp.h"
 #include "../../common/models.h"
 
 void worker_process_transmit(worker_ctx* ctx, Buffer* buf) {
