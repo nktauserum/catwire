@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdlib.h>
+#include <sodium.h>
 
 #include "../models/channel.h"
 #include "../models/pool.h"
