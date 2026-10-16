@@ -67,11 +67,12 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
+    u64 counter = 0;
+    struct epoll_event events[64];
     while (1) {
-        struct epoll_event events[64];
-        int n = epoll_wait(epoll_fd, events, 64, -1);
+        int ev_n = epoll_wait(epoll_fd, events, 64, -1);
 
-        for (int i = 0; i < n; ++i) {
+        for (int i = 0; i < ev_n; ++i) {
             if (events[i].data.fd == tun_fd) {
             } else if (events[i].data.fd == udp_fd) {
                 u32 idx = pool_acquire(pool); 
@@ -83,6 +84,10 @@ int main(int argc, char *argv[]) {
                     pool_release(pool, idx);
                     continue;
                 }
+
+                buf->len = n;
+                buf->origin = Receive;
+                buf->idx = counter++;
 
                 channel_push(&ch, idx);
             } else continue; // add graceful shutdown
