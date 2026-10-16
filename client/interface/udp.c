@@ -5,7 +5,8 @@
 
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include "logs.h"
+
+#include "../log/logs.h"
 
 int udp_open() {
     int fd = socket(AF_INET, SOCK_DGRAM, 0);

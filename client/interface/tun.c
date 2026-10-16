@@ -9,7 +9,7 @@
 #include <linux/if_tun.h>
 #include <unistd.h>
 
-#include "logs.h"
+#include "../log/logs.h"
 
 int tun_open(const char* ifname) {
 	size_t ifname_len = strlen(ifname);

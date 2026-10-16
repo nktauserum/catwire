@@ -1,12 +1,12 @@
 #include <stdio.h>
 
-#include "tun.h"
-#include "udp.h"
+#include "interface/tun.h"
+#include "interface/udp.h"
 
-#include "config.h"
-#include "logs.h"
-#include "pool.h"
-#include "channel.h"
+#include "config/config.h"
+#include "log/logs.h"
+#include "models/pool.h"
+#include "models/channel.h"
 
 #include <sys/epoll.h>
 

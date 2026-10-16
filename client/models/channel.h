@@ -2,7 +2,7 @@
 
 #include <stdlib.h>
 
-#include "../common/types.h"
+#include "../../common/types.h"
 
 #define QUEUE_SIZE 64
 
