@@ -10,8 +10,11 @@
 #include "models/channel.h"
 
 #include "worker/worker.h"
+#include "session/session.h"
 #include "config/config.h"
 #include "log/logs.h"
+
+#include <sodium.h>
 
 #define WORKERS_COUNT 4
 static const char* tun_name = "cw2";
@@ -20,11 +23,27 @@ int main(int argc, char *argv[]) {
     log_info("Starting...");
     if (argc != 2) {
         log_error("Incorrect command-line arguments");
-        return -1;
+        return 1;
     }
 
     Config config;
-    if (config_parse(&config, argv[1]) < 0) return -1;
+    if (config_parse(&config, argv[1]) < 0) return 1;
+
+    if (sodium_init() < 0) {
+        log_error("Failed to initialize libsodium");
+        return 1;
+    }
+
+    if (!crypto_aead_aes256gcm_is_available()) {
+        log_error("AES encryption is not supported by your hardware (CPU)");
+        return 1;
+    }
+
+    Session session = {0};
+    if (crypto_kx_seed_keypair(session.publicKey, session.privateKey, config.seed) != 0) {
+        log_error("Failed to generate a key pair from the provided seed"); 
+        return 1;
+    }
 
     int tun_fd = tun_open(tun_name);
     if (tun_fd < 0) {
@@ -58,6 +77,7 @@ int main(int argc, char *argv[]) {
         .pool   = pool, 
         .tun_fd = tun_fd,
         .udp_fd = udp_fd,
+        .session = session,
     };
 
     pthread_t workers[WORKERS_COUNT];

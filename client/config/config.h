@@ -3,7 +3,7 @@
 #include "../../common/types.h"
 
 typedef struct {
-    char seed[35];
+    u8 seed[35];
     u32 server_addr;
     u16 server_port;
 } Config;
