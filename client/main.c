@@ -40,6 +40,12 @@ int main(int argc, char *argv[]) {
     }
 
     Session session = {0};
+    session.remoteAddr = (Address) {
+        .sin_family = AF_INET,
+        .sin_addr   = config.server_addr,
+        .sin_port   = htons(config.server_port)
+    };
+
     if (crypto_kx_seed_keypair(session.publicKey, session.privateKey, config.seed) != 0) {
         log_error("Failed to generate a key pair from the provided seed"); 
         return 1;
