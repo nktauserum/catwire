@@ -19,6 +19,7 @@ static inline void __handle_data(worker_ctx* ctx, Packet* packet, size_t len) {
     ) < 0) return;
 
     tun_write(ctx->tun_fd, (const u8*)&dest->payload, dest->len);
+    pool_release(ctx->pool, idx);
 }
 
 static inline void __handle_handshake(worker_ctx* ctx, Packet* packet, size_t len) {
