@@ -9,6 +9,8 @@
 #include <linux/if_tun.h>
 #include <unistd.h>
 
+#include <errno.h>
+
 #include "../log/logs.h"
 
 int tun_open(const char* ifname) {
@@ -38,4 +40,12 @@ int tun_open(const char* ifname) {
     }
 
     return qfd;
+}
+
+int tun_write(int fd, const u8* buf, size_t len) {
+    while (1) {
+        ssize_t n = write(fd, buf, len);
+        if (n == -1 && errno == EINTR) continue;
+        return n;
+    }
 }

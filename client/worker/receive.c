@@ -3,8 +3,22 @@
 #include "../../common/models.h"
 #include "../log/logs.h"
 
+#include "../interface/tun.h"
+
 static inline void __handle_data(worker_ctx* ctx, Packet* packet, size_t len) {
-    
+    if (!session_available(&ctx->session)) return;
+
+    u32 idx = pool_acquire(ctx->pool);
+    Buffer* dest = &ctx->pool->data[idx];
+
+    if (crypto_aead_aegis256_decrypt(
+        dest->payload, (u64*)&dest->len, NULL,
+        packet->payload, len,
+        (u8*)&packet->header, (u64)sizeof(Header),
+        packet->header.aegis256_nonce, ctx->session.rx_key
+    ) < 0) return;
+
+    tun_write(ctx->tun_fd, (const u8*)&dest->payload, dest->len);
 }
 
 static inline void __handle_handshake(worker_ctx* ctx, Packet* packet, size_t len) {
