@@ -1,14 +1,17 @@
 #include <stdio.h>
+#include <stdlib.h>
+#include <sys/epoll.h>
+#include <pthread.h>
 
 #include "interface/tun.h"
 #include "interface/udp.h"
 
-#include "config/config.h"
-#include "log/logs.h"
 #include "models/pool.h"
 #include "models/channel.h"
 
-#include <sys/epoll.h>
+#include "worker/worker.h"
+#include "config/config.h"
+#include "log/logs.h"
 
 #define WORKERS_COUNT 4
 static const char* tun_name = "cw2";
@@ -50,7 +53,16 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    // start workers here
+    worker_ctx ctx = { 
+        .ch     = &ch, 
+        .pool   = pool, 
+        .tun_fd = tun_fd,
+        .udp_fd = udp_fd,
+    };
+
+    pthread_t workers[WORKERS_COUNT];
+    for (int i = 0; i < WORKERS_COUNT; ++i) 
+        pthread_create(&workers[i], NULL, worker_init, (void*)&ctx);
 
     int epoll_fd = epoll_create1(0);
     struct epoll_event ev = {.events = EPOLLIN};
