@@ -136,7 +136,7 @@ static uint8_t lookupB64(uint8_t c) {
   }
 }
 
-size_t base64_decode(char* dst, const char* src, size_t len) {
+size_t base64_decode(u8* dst, const u8* src, size_t len) {
   size_t dst_size = 0;
 
   while (len >= 4) {

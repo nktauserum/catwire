@@ -43,7 +43,7 @@ int config_parse(Config* config, const char* filename) {
                 return -1;
             }
 
-            base64_decode(config->seed, separator+2, value_len);
+            base64_decode(config->seed, (u8*)separator+2, value_len);
         } else if (strncmp(line, "server_addr", key_len) == 0) {
             size_t value_len = len - key_len - 4; // somehow it works
             if (value_len >= 16) {
