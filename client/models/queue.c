@@ -9,32 +9,33 @@
 void queue_init(Queue* q) {
     memset(q->queue, 0, sizeof(q->queue)); // each queue was allocated with calloc, so this is not needed
 
-    __atomic_clear(&q->head,    __ATOMIC_SEQ_CST);
-    __atomic_clear(&q->tail,    __ATOMIC_SEQ_CST);
-    __atomic_clear(&q->waiting, __ATOMIC_SEQ_CST);
-    __atomic_clear(&q->closed,  __ATOMIC_SEQ_CST);
+    q->head = q->tail = q->tail_cache = q->waiting = q->closed = 0;
 }
 
 Status queue_write(Queue* q, int value) {
-    if (__atomic_load_n(&q->head, __ATOMIC_ACQUIRE) - q->tail_cache == QUEUE_SIZE) {
+    u32 head = __atomic_load_n(&q->head, __ATOMIC_RELAXED);
+    if (head - q->tail_cache == QUEUE_SIZE) {
         q->tail_cache = __atomic_load_n(&q->tail, __ATOMIC_ACQUIRE);
-        if (unlikely(__atomic_load_n(&q->head, __ATOMIC_ACQUIRE) - q->tail_cache == QUEUE_SIZE))
+        if (unlikely(head - q->tail_cache == QUEUE_SIZE))
             return ESIZE;
     }
 
-    q->queue[__atomic_fetch_add(&q->head, 1, __ATOMIC_RELEASE) % QUEUE_SIZE] = value;
+    q->queue[head % QUEUE_SIZE] = value;
+    __atomic_store_n(&q->head, head + 1, __ATOMIC_RELEASE);
 
     return OK;
 }
 
 Status queue_read(Queue* q, int* buf) {
-    if (__atomic_load_n(&q->tail, __ATOMIC_ACQUIRE) == __atomic_load_n(&q->head, __ATOMIC_ACQUIRE)) {
+    u32 tail = __atomic_load_n(&q->tail, __ATOMIC_RELAXED);
+    if (tail == __atomic_load_n(&q->head, __ATOMIC_ACQUIRE)) {
         if (unlikely(__atomic_load_n(&q->closed, __ATOMIC_ACQUIRE)))
             return ECLOSED;
         return ESIZE;
     }
 
-    *buf = q->queue[__atomic_fetch_add(&q->tail, 1, __ATOMIC_RELEASE) % QUEUE_SIZE];
+    *buf = q->queue[tail % QUEUE_SIZE];
+    __atomic_store_n(&q->tail, tail + 1, __ATOMIC_RELEASE);
 
     return OK;
 }

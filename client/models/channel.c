@@ -22,7 +22,7 @@ Queue* queue_acquire(Channel* ch) {
 
 void channel_push(Channel* ch, int value) {
     for (;;) {
-        u32 idx  = __atomic_fetch_add(&ch->next, 1, __ATOMIC_RELAXED);
+        u32 idx  = __atomic_fetch_add(&ch->next, 1, __ATOMIC_RELAXED) % ch->capacity;
         Queue* q = &ch->queues[idx];
 
         Status status = queue_write(q, value);
