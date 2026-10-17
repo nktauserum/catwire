@@ -6,9 +6,6 @@ int channel_init(Channel* ch, size_t capacity) {
     ch->capacity = capacity;
     ch->queues   = calloc(capacity, sizeof(Queue));
     if (!ch->queues) return -1;
-
-    for (size_t i = 0; i < capacity; ++i)
-        queue_init(&ch->queues[i]);
    
     __atomic_clear(&ch->count, __ATOMIC_SEQ_CST);
     __atomic_clear(&ch->next,  __ATOMIC_SEQ_CST);

@@ -1,16 +1,8 @@
 #include "channel.h"
 
-#include <string.h>
-
 #include "futex.h"
 
 #define unlikely(x)  __builtin_expect(!!(x), 0)
-
-void queue_init(Queue* q) {
-    memset(q->queue, 0, sizeof(q->queue)); // each queue was allocated with calloc, so this is not needed
-
-    q->head = q->tail = q->tail_cache = q->waiting = q->closed = 0;
-}
 
 Status queue_write(Queue* q, int value) {
     u32 head = __atomic_load_n(&q->head, __ATOMIC_RELAXED);

@@ -33,7 +33,6 @@ void channel_close(Channel*);
 
 
 Queue* queue_acquire(Channel*);
-void   queue_init   (Queue*);
 
 Status queue_write  (Queue*, int);
 Status queue_read   (Queue*, int*);
