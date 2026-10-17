@@ -18,7 +18,7 @@ class Worker {
 
     struct msghdr msg;
 
-    static const int entries = 64;
+    static const int entries = 128;
     static const int buffer_size = 2048;
 
     enum : u16 {

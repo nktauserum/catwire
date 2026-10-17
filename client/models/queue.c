@@ -41,6 +41,7 @@ Status queue_read(Queue* q, int* buf) {
 }
 
 void queue_wait(Queue* q) {
+    __atomic_store_n(&q->waiting, 1, __ATOMIC_RELAXED);
     futex_wait(&q->waiting);
 }
 

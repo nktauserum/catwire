@@ -67,6 +67,8 @@ Config::Config(const char* filename) {
 
                 } else if (val.first == "port") {
                     port = handle_int(val.second);
+                } else if (val.first == "num_cores") {
+                    num_cores = handle_int(val.second);
                 } else continue;
 
                 break;
