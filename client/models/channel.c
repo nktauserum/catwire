@@ -36,5 +36,5 @@ void channel_close(Channel* ch) {
     for (uint32_t i = 0; i < ch->capacity; ++i) 
         queue_close(&ch->queues[i]);
 
-    free(ch->queues);
+    free(ch->queues); // possibly dangerous, bc we don't wait for queue workers to finish their tasks 
 }
