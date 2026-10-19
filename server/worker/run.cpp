@@ -47,6 +47,9 @@ void Worker::Run() {
 
         io_uring_buf_ring_advance(buf_ring, count);
         io_uring_cq_advance(&ring, count);
+
+        if (io_uring_sq_ready(&ring) > 0)
+            io_uring_submit(&ring);
     }
 
 }

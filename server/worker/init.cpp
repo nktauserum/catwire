@@ -47,8 +47,7 @@ Worker::Worker(RoutingTable* rtable, Config config, int udp_fd) :
         memset(&params, 0, sizeof(params));
 
         params.cq_entries = entries * 2;
-        params.flags = IORING_SETUP_SUBMIT_ALL | IORING_SETUP_CQSIZE | IORING_SETUP_SQPOLL;
-        params.sq_thread_idle = 2000;
+        params.flags = IORING_SETUP_SUBMIT_ALL | IORING_SETUP_COOP_TASKRUN | IORING_SETUP_CQSIZE;
 
         int ret = io_uring_queue_init_params(entries, &ring, &params);
         if (ret < 0) {
