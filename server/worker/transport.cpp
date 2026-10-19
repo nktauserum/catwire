@@ -139,5 +139,4 @@ void Worker::__transport_process_outgoing(u32 idx) {
     memcpy(&i, &info, sizeof(u64));
 
     io_uring_sqe_set_data64(sqe, i);
-    io_uring_submit(&ring); // TODO: add batching queue 
 }

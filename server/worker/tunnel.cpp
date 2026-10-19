@@ -73,6 +73,4 @@ void Worker::__tunnel_process_outgoing(u32 idx) {
     memcpy(&info_, &info, sizeof(u64));
 
     io_uring_sqe_set_data64(sqe, info_);
-
-    io_uring_submit(&ring); // TODO: add batching
 }
