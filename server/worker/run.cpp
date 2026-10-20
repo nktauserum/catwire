@@ -1,13 +1,18 @@
 #include "../worker.hpp"
 
 void Worker::Run() {
-    std::vector<struct io_uring_cqe*> cqes(entries*2);
+    std::array<struct io_uring_cqe*, entries*2> cqes;
 
-     while (true) {
-        int ret = io_uring_submit_and_wait(&ring, 1); 
+    while (true) {
+        struct __kernel_timespec ts = {
+            .tv_sec = 2,
+            .tv_nsec = 0
+        };
+
+        int ret = io_uring_submit_and_wait_min_timeout(&ring, &cqes[0], 16, &ts, 100, nullptr);
         if (unlikely(ret == -EINTR))
             continue;
-        if (unlikely(ret < 0)) {
+        if (unlikely(ret < 0 && ret != -ETIME)) {
             fprintf(stderr, "submit and wait failed %d\n", ret);
             break;
         }
