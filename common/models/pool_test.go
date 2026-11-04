@@ -13,7 +13,6 @@ func TestPoolConcurrent(t *testing.T) {
 	var wg sync.WaitGroup
 	for range 100 {
 		wg.Go(func() {
-			defer wg.Done()
 			for range iterations {
 				idx := p.Acquire()
 				time.Sleep(time.Microsecond)

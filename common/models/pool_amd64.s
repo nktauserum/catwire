@@ -1,11 +1,30 @@
-TEXT ·pool_acquire(SB), $0-12
-    MOVQ x+0(FP), R8 // R8 - pointer to bitmap 
+#include "go_asm.h"
+
+TEXT ·pool_acquire(SB), $16-12
+    MOVQ $const_initialBackoffValue, R9 // backoff
+    JMP  loop
+
+backoff:
+    PAUSE
+    MOVQ  R9, AX
+    MOVQ  $const_maxBackoffValue, BX
+    IMULQ $2, AX 
+    CMPQ  AX, BX
+    JCC   sleep
+
+    MOVQ  AX, R9
+
+sleep:
+    MOVQ  R9, 0(SP)
+    MOVQ  R9, 8(SP)
+    CALL  time·Sleep(SB)
+    MOVQ  8(SP), R9
 
 loop:
-    PAUSE
+    MOVQ x+0(FP), R8 // R8 - pointer to bitmap
     MOVQ  (R8), AX   // dereference the pointer (relaxed)
     TESTQ AX,  AX   // AX - expected bitmap value
-    JE    loop      // if bitmap == 0: continue
+    JE    backoff      // if bitmap == 0: continue
 
     XORQ   BX, BX
     BSFQ   AX, BX   // BX - offset
@@ -17,7 +36,7 @@ loop:
     
     LOCK; CMPXCHGQ DX, 0(R8) 
 
-    JNE    loop
+    JNE   backoff 
 
     MOVL   BX, ret+8(FP)
     RET
