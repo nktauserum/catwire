@@ -36,7 +36,7 @@ loop:
     SHLQ   CX, DX      // (1 << offset)
     XORQ   AX, DX      // DX - new bitmap value
     
-    LOCK;  CMPXCHGQ DX, 0(R8) 
+    LOCK;  CMPXCHGQ DX, (R8) 
     JNE    sleep
 
     MOVL   BX, ret+8(FP)
@@ -49,6 +49,6 @@ TEXT ·pool_release(SB), $0-12
     MOVQ x+8(FP), CX // index (offset)
     SHLQ CX, DX
 
-    LOCK; ORQ  DX, 0(AX)
+    LOCK; ORQ  DX, (AX)
 
     RET
