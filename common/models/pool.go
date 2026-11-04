@@ -15,10 +15,11 @@ func (p *Pool[T]) Acquire() uint32 {
 	return pool_acquire(&p.bitmap)
 }
 
-func (p *Pool[T]) Release(index int) {
+func (p *Pool[T]) Release(idx uint32) {
 	// if index < 0 || index >= len(p.data) {
 	// 	return // wrong index
 	// }
 	//
 	// atomic.OrUint64(&p.bitmap, uint64(1<<index))
+	pool_release(&p.bitmap, idx)
 }

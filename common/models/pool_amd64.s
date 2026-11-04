@@ -22,3 +22,15 @@ loop:
 
     MOVL   BX, ret+8(FP)
     RET
+
+TEXT ·pool_release(SB), $0-12
+    MOVQ x+0(FP), AX // AX - pointer to bitmap 
+
+    MOVQ $1, DX
+    MOVQ x+8(FP), CX // index (offset)
+    SHLQ CX, DX
+
+    LOCK
+    ORQ  DX, 0(AX)
+
+    RET
