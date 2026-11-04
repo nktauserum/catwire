@@ -11,6 +11,10 @@ func CreatePool[T any]() *Pool[T] {
 	}
 }
 
+func (p *Pool[T]) Get(idx uint32) *T {
+	return &p.data[idx]
+}
+
 func (p *Pool[T]) Acquire() uint32 {
 	return pool_acquire(&p.bitmap)
 }

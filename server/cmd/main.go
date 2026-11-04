@@ -8,13 +8,11 @@ import (
 
 func main() {
 	p := models.CreatePool[uint64]()
-	idx := p.Acquire()
-	fmt.Printf("Got index %v\n", idx)
-	p.Release(idx)
-	idx = p.Acquire()
-	fmt.Printf("Got index %v\n", idx)
-	p.Release(idx)
-	idx = p.Acquire()
-	fmt.Printf("Got index %v\n", idx)
+
+	for range 65 {
+		idx := p.Acquire()
+		fmt.Printf("Got index %v\n", idx)
+		p.Release(idx)
+	}
 	// p.Release(idx)
 }

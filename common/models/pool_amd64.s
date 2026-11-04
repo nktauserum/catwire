@@ -8,15 +8,14 @@ loop:
     JE    loop      // if bitmap == 0: continue
 
     XORQ   BX, BX
-    TZCNTQ AX, BX   // BX - offset
+    BSFQ   AX, BX   // BX - offset
 
     MOVQ   $1, DX
     MOVQ   BX, CX
     SHLQ   CX, DX   // (1 << offset)
     XORQ   AX, DX   // DX - new bitmap value
     
-    LOCK
-    CMPXCHGQ DX, 0(R8) 
+    LOCK; CMPXCHGQ DX, 0(R8) 
 
     JNE    loop
 
@@ -30,7 +29,6 @@ TEXT ·pool_release(SB), $0-12
     MOVQ x+8(FP), CX // index (offset)
     SHLQ CX, DX
 
-    LOCK
-    ORQ  DX, 0(AX)
+    LOCK; ORQ  DX, 0(AX)
 
     RET
