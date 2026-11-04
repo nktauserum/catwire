@@ -1,6 +1,8 @@
 #include "go_asm.h"
+#include "funcdata.h"
 
 TEXT ·pool_acquire(SB), $16-12
+    NO_LOCAL_POINTERS
     MOVQ $const_initialBackoffValue, R9 // backoff
     JMP  loop
 
@@ -36,7 +38,7 @@ loop:
     
     LOCK; CMPXCHGQ DX, 0(R8) 
 
-    JNE   backoff 
+    JNE   sleep
 
     MOVL   BX, ret+8(FP)
     RET
