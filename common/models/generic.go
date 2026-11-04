@@ -28,3 +28,7 @@ func pool_acquire(bitmap *uint64) uint32 {
 		}
 	}
 }
+
+func pool_release(bitmap *uint64, index uint32) {
+	atomic.OrUint64(bitmap, uint64(1<<index))
+}
