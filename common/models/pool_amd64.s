@@ -7,7 +7,6 @@ TEXT ·pool_acquire(SB), $16-12
     JMP  loop
 
 backoff:
-    PAUSE
     MOVQ  R9, AX
     MOVQ  $const_maxBackoffValue, BX
     IMULQ $2, AX 
@@ -17,6 +16,7 @@ backoff:
     MOVQ  AX, R9
 
 sleep:
+    PAUSE
     MOVQ  R9, 0(SP)
     MOVQ  R9, 8(SP)
     CALL  time·Sleep(SB)
