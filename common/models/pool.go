@@ -1,10 +1,11 @@
-package pool
+package models
 
 import (
-	"math/bits"
 	"sync/atomic"
 	"time"
 )
+
+func ctzll(uint64) uint32 
 
 type Pool[T any] struct {
 	bitmap uint64
@@ -17,12 +18,12 @@ func CreatePool[T any]() *Pool[T] {
 	}
 }
 
-func (p *Pool[T]) Acquire() int {
+func (p *Pool[T]) Acquire() uint32 {
 	backoff := time.Nanosecond
 	for {
 		bitmap := atomic.LoadUint64(&p.bitmap)
 		if bitmap != 0 {
-			offset := bits.TrailingZeros64(bitmap)
+			offset := ctzll(bitmap)
 			if atomic.CompareAndSwapUint64(&p.bitmap, bitmap, bitmap^(1<<offset)) {
 				return offset
 			}

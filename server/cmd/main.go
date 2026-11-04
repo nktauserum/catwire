@@ -1,9 +1,18 @@
 package main
 
-import "github.com/nktauserum/catwire/common/models/pool"
+import (
+	"fmt"
+
+	"github.com/nktauserum/catwire/common/models"
+)
 
 func main() {
-	p := pool.CreatePool[uint64]()
+	p := models.CreatePool[uint64]()
 	idx := p.Acquire()
-	p.Release(idx)
+	fmt.Printf("Got index %v\n", idx)
+	idx = p.Acquire()
+	fmt.Printf("Got index %v\n", idx)
+	idx = p.Acquire()
+	fmt.Printf("Got index %v\n", idx)
+	// p.Release(idx)
 }
