@@ -3,8 +3,16 @@ package tun
 
 import (
 	"os"
+	"syscall"
 
 	"golang.org/x/sys/unix"
+)
+
+const (
+	cIFFTUN        = 0x0001
+	cIFFTAP        = 0x0002
+	cIFFNOPI       = 0x1000
+	cIFFMULTIQUEUE = 0x0100
 )
 
 type TUN struct {
@@ -13,7 +21,7 @@ type TUN struct {
 }
 
 func CreateTUN(name string) (*TUN, error) {
-	nfd, err := unix.Open("/dev/net/tun", unix.O_RDWR|unix.O_CLOEXEC, 0)
+	nfd, err := syscall.Open("/dev/net/tun", unix.O_RDWR|syscall.O_NONBLOCK, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -23,14 +31,11 @@ func CreateTUN(name string) (*TUN, error) {
 		return nil, err
 	}
 
+	var flags uint16 = cIFFNOPI | cIFFTUN 
+	ifr.SetUint16(flags)
+
 	err = unix.IoctlIfreq(nfd, unix.TUNSETIFF, ifr)
 	if err != nil {
-		return nil, err
-	}
-
-	err = unix.SetNonblock(nfd, true)
-	if err != nil {
-		unix.Close(nfd)
 		return nil, err
 	}
 
@@ -48,4 +53,3 @@ func (tun *TUN) Write(data []byte) (int, error) {
 func (tun *TUN) Read(buf []byte) (int, error) {
 	return tun.file.Read(buf)
 }
-
