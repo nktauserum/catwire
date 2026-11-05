@@ -2,11 +2,19 @@
 package crypto
 
 /*
-#cgo LDFLAGS: -lsodium
+#cgo LDFLAGS: -lsodium -static
 #include <sodium.h>
 */
 import "C"
+import "unsafe"
 
-func Init() bool {
-	return C.sodium_init() >= 0
+// var _ = func() bool {
+// 	return C.sodium_init() >= 0
+// }()
+
+type Cipher struct {
+}
+
+func RandomBytes(buf []byte) {
+	C.randombytes_buf(unsafe.Pointer(unsafe.SliceData(buf)), C.size_t(len(buf)))
 }

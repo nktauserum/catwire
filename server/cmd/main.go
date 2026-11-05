@@ -1,7 +1,7 @@
 package main
 
 import (
-	"log"
+	"fmt"
 
 	"github.com/nktauserum/catwire/common/crypto"
 )
@@ -16,7 +16,7 @@ func main() {
 	// fmt.Printf("Got index %v\n", idx)
 	// p.Release(idx)
 
-	if !crypto.Init() {
-		log.Fatalln("Error initializing the cryptography")
-	}
+	var buf [32]byte
+	crypto.RandomBytes(buf[:])
+	fmt.Printf("%#v\n", buf)
 }
