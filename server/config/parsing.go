@@ -53,7 +53,7 @@ func ParseConfig(path string) (Config, error) {
 			}
 
 			state = CLIENT_STATE
-			client.Name = string(str[1:len(str)-1])
+			client.Name = string(str[1 : len(str)-1])
 
 			continue
 		}
