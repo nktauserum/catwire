@@ -31,7 +31,7 @@ func CreateTUN(name string) (*TUN, error) {
 		return nil, err
 	}
 
-	var flags uint16 = cIFFNOPI | cIFFTUN 
+	var flags uint16 = cIFFNOPI | cIFFTUN
 	ifr.SetUint16(flags)
 
 	err = unix.IoctlIfreq(nfd, unix.TUNSETIFF, ifr)
