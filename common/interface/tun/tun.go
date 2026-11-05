@@ -40,3 +40,12 @@ func CreateTUN(name string) (*TUN, error) {
 		file: fd,
 	}, nil
 }
+
+func (tun *TUN) Write(data []byte) (int, error) {
+	return tun.file.Write(data)
+}
+
+func (tun *TUN) Read(buf []byte) (int, error) {
+	return tun.file.Read(buf)
+}
+
