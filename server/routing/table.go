@@ -16,8 +16,8 @@ func CreateTable(clients []config.Client) *Table {
 	var table Table
 
 	for _, c := range clients {
-		idx, ok := ExtractIndex(c.LocalAddr)
-		if !ok {
+		idx, err := ExtractIndex(c.LocalAddr)
+		if err {
 			continue
 		}
 

@@ -15,7 +15,8 @@ type Header struct {
 	Flags     uint32
 	PeerIndex uint32
 	Counter   uint64
-	Nonce     [32]byte
+	Nonce     []byte
 }
 
 const HeaderSize int = 4 + 4 + 8 + 32
+const HandshakeSize int = 32

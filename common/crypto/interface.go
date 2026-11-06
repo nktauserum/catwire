@@ -13,6 +13,7 @@ import "unsafe"
 // }()
 
 type Cipher struct {
+	PublicKey, privateKey [32]byte
 }
 
 func RandomBytes(buf []byte) {
