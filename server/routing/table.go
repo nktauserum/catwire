@@ -12,7 +12,7 @@ type Table struct {
 	lookup [availableClients]atomic.Pointer[Session]
 }
 
-func CreateTable(clients []config.Client) (*Table, error) {
+func CreateTable(clients []config.Client) *Table {
 	var table Table
 
 	for _, c := range clients {
@@ -30,7 +30,7 @@ func CreateTable(clients []config.Client) (*Table, error) {
 		table.Store(idx, session)
 	}
 
-	return &table, nil
+	return &table
 }
 
 func (t *Table) Lookup(idx uint32) *Session {

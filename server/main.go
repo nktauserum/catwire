@@ -14,11 +14,11 @@ import (
 )
 
 func receive(conn *net.UDPConn, table *routing.Table) {
-
+	for {}
 }
 
 func transmit(tunnel *tun.TUN, table *routing.Table) {
-
+	for {}
 }
 
 func main() {
@@ -26,6 +26,8 @@ func main() {
 	if err != nil {
 		log.Fatalln(err)
 	}
+
+	table := routing.CreateTable(c.Clients)
 
 	conn, err := net.ListenUDP("udp", &c.Address)
 	if err != nil {
@@ -36,11 +38,6 @@ func main() {
 	tunnel, err := tun.CreateTUN("cw0")
 	if err != nil {
 		log.Fatalf("error creating TUN: %v\n", err)
-	}
-
-	table, err := routing.CreateTable(c.Clients)
-	if err != nil {
-		log.Fatalf("error creating routing table: %v\n", err)
 	}
 
 	go receive(conn, table)
