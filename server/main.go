@@ -25,19 +25,14 @@ type server struct {
 	cipher *crypto.Cipher
 }
 
-type receive_buffer struct {
+type buffer struct {
 	incomingAddr *net.UDPAddr
 	size         int
 	payload      [protocol.MaxPayloadSize]byte
 }
 
-type transmit_buffer struct {
-	size    int
-	payload [protocol.MaxPayloadSize]byte
-}
-
 func (s *server) receive() {
-	pool := models.CreatePool[receive_buffer]()
+	pool := models.CreatePool[buffer]()
 	ch := make(chan uint32, 1024)
 
 	for range runtime.NumCPU() {
@@ -120,7 +115,7 @@ func (s *server) receive() {
 }
 
 func (s *server) transmit() {
-	pool := models.CreatePool[transmit_buffer]()
+	pool := models.CreatePool[buffer]()
 	ch := make(chan uint32, 1024)
 
 	for range runtime.NumCPU() {
