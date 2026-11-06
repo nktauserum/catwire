@@ -72,7 +72,7 @@ func (s *server) receive() {
 					session.Active = true
 					session.PublicAddr = *buf.incomingAddr
 
-					session.ReceiveKey, session.TransmitKey, e = s.cipher.GenerateServerKeys()
+					session.ReceiveKey, session.TransmitKey, e = s.cipher.GenerateServerKeys(buf.payload[protocol.HeaderSize:])
 					if e {
 						pool.Release(idx)
 						continue
