@@ -9,6 +9,8 @@ const (
 	// TODO: ChaCha-PoLy-x... fallback
 )
 
+const MaxPayloadSize = 65535 + 16
+
 type Header struct {
 	Flags     uint32
 	PeerIndex uint32
@@ -17,8 +19,3 @@ type Header struct {
 }
 
 const HeaderSize int = 4 + 4 + 8 + 32
-
-type Packet struct {
-	Header  Header
-	Payload []byte
-}

@@ -6,25 +6,59 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"runtime"
 
 	"github.com/nktauserum/catwire/common/interface/tun"
+	"github.com/nktauserum/catwire/common/models"
+	"github.com/nktauserum/catwire/common/protocol"
 	"github.com/nktauserum/catwire/server/config"
 	"github.com/nktauserum/catwire/server/routing"
 	"golang.org/x/sys/unix"
 )
 
 type server struct {
-	conn *net.UDPConn
+	conn   *net.UDPConn
 	tunnel *tun.TUN
-	table *routing.Table
+	table  *routing.Table
+}
+
+type buffer struct {
+	incomingAddr *net.UDPAddr
+	size         int
+	payload      [protocol.MaxPayloadSize]byte
 }
 
 func (s *server) receive() {
-	for {}
+	pool := models.CreatePool[buffer]()
+	ch := make(chan uint32, 1024)
+
+	for range runtime.NumCPU() {
+		go func() {
+			for idx := range ch {
+				buf := pool.Get(idx)
+				log.Printf("Receive: got %v bytes\n", buf.size)
+			}
+		}()
+	}
+
+	var err error
+	for {
+		idx := pool.Acquire()
+		buf := pool.Get(idx)
+
+		buf.size, buf.incomingAddr, err = s.conn.ReadFromUDP(buf.payload[:])
+		if err != nil {
+			pool.Release(idx)
+			continue
+		}
+
+		ch <- idx
+	}
 }
 
 func (s *server) transmit() {
-	for {}
+	for {
+	}
 }
 
 func main() {
@@ -46,7 +80,7 @@ func main() {
 		log.Fatalf("error creating TUN: %v\n", err)
 	}
 
-	s := server {conn, tunnel, table}
+	s := server{conn, tunnel, table}
 
 	go s.receive()
 	go s.transmit()
