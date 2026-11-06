@@ -8,9 +8,9 @@ package crypto
 import "C"
 import "unsafe"
 
-// var _ = func() bool {
-// 	return C.sodium_init() >= 0
-// }()
+func Init() bool {
+	return C.sodium_init() < 0
+}
 
 type Cipher struct {
 	PublicKey, privateKey [32]byte
