@@ -1,12 +1,25 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net"
+	"os"
+	"os/signal"
 
 	"github.com/nktauserum/catwire/common/interface/tun"
 	"github.com/nktauserum/catwire/server/config"
+	"github.com/nktauserum/catwire/server/routing"
+	"golang.org/x/sys/unix"
 )
+
+func receive(conn *net.UDPConn, table *routing.RoutingTable) {
+
+}
+
+func transmit(tunnel *tun.TUN, table *routing.RoutingTable) {
+
+}
 
 func main() {
 	c, err := config.ParseConfig("server/config/config.example.ini")
@@ -24,4 +37,18 @@ func main() {
 	if err != nil {
 		log.Fatalf("error creating TUN: %v\n", err)
 	}
+
+	go receive(conn, table)
+	go transmit(tunnel, table)
+
+	term := make(chan os.Signal, 1)
+
+	signal.Notify(term, unix.SIGTERM)
+	signal.Notify(term, os.Interrupt)
+
+	select {
+	case <-term:
+	}
+
+	fmt.Println("Shutdown")
 }
