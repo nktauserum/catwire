@@ -13,11 +13,17 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-func receive(conn *net.UDPConn, table *routing.Table) {
+type server struct {
+	conn *net.UDPConn
+	tunnel *tun.TUN
+	table *routing.Table
+}
+
+func (s *server) receive() {
 	for {}
 }
 
-func transmit(tunnel *tun.TUN, table *routing.Table) {
+func (s *server) transmit() {
 	for {}
 }
 
@@ -40,8 +46,10 @@ func main() {
 		log.Fatalf("error creating TUN: %v\n", err)
 	}
 
-	go receive(conn, table)
-	go transmit(tunnel, table)
+	s := server {conn, tunnel, table}
+
+	go s.receive()
+	go s.transmit()
 
 	term := make(chan os.Signal, 1)
 
