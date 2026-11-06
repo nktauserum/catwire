@@ -155,6 +155,10 @@ func main() {
 	}
 
 	table := routing.CreateTable(c.Clients)
+	cipher, e := crypto.CreateCipher(c.Seed)
+	if e {
+		log.Fatalln(err)
+	}
 
 	conn, err := net.ListenUDP("udp", &c.Address)
 	if err != nil {
@@ -167,7 +171,7 @@ func main() {
 		log.Fatalf("error creating TUN: %v\n", err)
 	}
 
-	s := server{conn, tunnel, table}
+	s := server{conn, tunnel, table, cipher}
 
 	go s.receive()
 	go s.transmit()
