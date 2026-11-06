@@ -16,7 +16,7 @@ func Decrypt(dst, src []byte, key [32]byte) ([]byte, bool) {
 		(*C.uchar)(unsafe.Pointer(&dst[0])), (*C.ulonglong)(&size), (*C.uchar)(unsafe.Pointer(uintptr(0))),
 		(*C.uchar)(unsafe.Pointer(&src[protocol.HeaderSize])), (C.ulonglong)(len(src)-protocol.HeaderSize),
 		(*C.uchar)(unsafe.Pointer(&src[0])), (C.ulonglong)(protocol.HeaderSize),
-		(*C.uchar)(unsafe.Pointer(&src[protocol.HeaderSize-32])), (*C.uchar)(&key),
+		(*C.uchar)(unsafe.Pointer(&src[protocol.HeaderSize-32])), (*C.uchar)(&key[0]),
 	) // TODO: add fallback
 
 	return dst[:size], ret < 0
