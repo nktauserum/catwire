@@ -8,8 +8,13 @@ import (
 
 const availableClients = 256
 
+type Entry struct {
+	ReceiveCounter, TransmitCounter atomic.Uint64
+	Session                         atomic.Pointer[Session]
+}
+
 type Table struct {
-	lookup [availableClients]atomic.Pointer[Session]
+	lookup [availableClients]Entry
 }
 
 func CreateTable(clients []config.Client) *Table {
@@ -33,18 +38,18 @@ func CreateTable(clients []config.Client) *Table {
 	return &table
 }
 
-func (t *Table) Lookup(idx uint32) *Session {
-	if idx >= uint32(len(t.lookup)) {
+func (t *Table) Lookup(idx uint32) *Entry {
+	if idx >= availableClients {
 		return nil
 	}
 
-	return t.lookup[idx].Load()
+	return &t.lookup[idx]
 }
 
 func (t *Table) Store(idx uint32, session *Session) {
-	if idx >= uint32(len(t.lookup)) {
+	if idx >= availableClients {
 		return
 	}
 
-	t.lookup[idx].Store(session)
+	t.lookup[idx].Session.Store(session)
 }

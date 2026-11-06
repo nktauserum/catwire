@@ -11,7 +11,6 @@ type Session struct {
 	PublicKey, ReceiveKey, TransmitKey [32]byte
 	PublicAddr                         net.UDPAddr
 	LocalAddr                          net.IP
-	ReceiveCounter, TransmitCounter    uint64 // TODO: move to the routing table
 }
 
 func (s *Session) Decrypt(dst, src []byte) ([]byte, bool) {

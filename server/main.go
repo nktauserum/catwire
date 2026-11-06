@@ -48,8 +48,8 @@ func (s *server) receive() {
 					Nonce:     buf.payload[16:protocol.HeaderSize],
 				}
 
-				s_ptr := s.table.Lookup(header.PeerIndex)
-				if s_ptr == nil {
+				entry := s.table.Lookup(header.PeerIndex)
+				if entry == nil {
 					pool.Release(idx)
 					continue
 				}
@@ -63,7 +63,7 @@ func (s *server) receive() {
 						continue
 					}
 
-					session := *s_ptr
+					session := *entry.Session.Load()
 					session.Active = true
 					session.PublicAddr = *buf.incomingAddr
 
