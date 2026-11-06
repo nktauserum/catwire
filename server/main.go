@@ -38,6 +38,11 @@ func main() {
 		log.Fatalf("error creating TUN: %v\n", err)
 	}
 
+	table, err := routing.CreateTable(c.Clients)
+	if err != nil {
+		log.Fatalf("error creating routing table: %v\n", err)
+	}
+
 	go receive(conn, table)
 	go transmit(tunnel, table)
 
@@ -50,5 +55,5 @@ func main() {
 	case <-term:
 	}
 
-	fmt.Println("Shutdown")
+	fmt.Println("\nShutdown")
 }
