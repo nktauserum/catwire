@@ -43,6 +43,7 @@ func (s *server) receive() {
 			for idx := range ch {
 				buf := pool.Get(idx)
 				log.Printf("Receive: got %v bytes\n", buf.size)
+				pool.Release(idx)
 			}
 		}()
 	}
@@ -71,6 +72,7 @@ func (s *server) transmit() {
 			for idx := range ch {
 				buf := pool.Get(idx)
 				log.Printf("Transmit: got %v bytes\n", buf.size)
+				pool.Release(idx)
 			}
 		}()
 	}
