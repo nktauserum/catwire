@@ -13,11 +13,11 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-func receive(conn *net.UDPConn, table *routing.RoutingTable) {
+func receive(conn *net.UDPConn, table *routing.Table) {
 
 }
 
-func transmit(tunnel *tun.TUN, table *routing.RoutingTable) {
+func transmit(tunnel *tun.TUN, table *routing.Table) {
 
 }
 
