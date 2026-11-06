@@ -91,7 +91,7 @@ func (s *server) receive() {
 					s.conn.WriteToUDP(tx_buf[:], buf.incomingAddr)
 
 				} else if header.Flags&protocol.F_DATA == 1 {
-					
+
 				}
 
 				pool.Release(idx)
