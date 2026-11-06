@@ -22,14 +22,20 @@ type server struct {
 	table  *routing.Table
 }
 
-type buffer struct {
+type receive_buffer struct {
 	incomingAddr *net.UDPAddr
 	size         int
 	payload      [protocol.MaxPayloadSize]byte
 }
 
+type transmit_buffer struct {
+	size         int
+	payload      [protocol.MaxPayloadSize]byte
+}
+
+
 func (s *server) receive() {
-	pool := models.CreatePool[buffer]()
+	pool := models.CreatePool[receive_buffer]()
 	ch := make(chan uint32, 1024)
 
 	for range runtime.NumCPU() {
@@ -57,7 +63,30 @@ func (s *server) receive() {
 }
 
 func (s *server) transmit() {
+	pool := models.CreatePool[transmit_buffer]()
+	ch := make(chan uint32, 1024)
+
+	for range runtime.NumCPU() {
+		go func() {
+			for idx := range ch {
+				buf := pool.Get(idx)
+				log.Printf("Transmit: got %v bytes\n", buf.size)
+			}
+		}()
+	}
+
+	var err error
 	for {
+		idx := pool.Acquire()
+		buf := pool.Get(idx)
+
+		buf.size, err = s.tunnel.Read(buf.payload[:])
+		if err != nil {
+			pool.Release(idx)
+			continue
+		}
+
+		ch <- idx
 	}
 }
 
