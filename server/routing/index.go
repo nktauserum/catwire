@@ -17,3 +17,13 @@ func ExtractIndex(addr uint32) (uint32, bool) {
 	idx_base := (addr >> 24) & 0xFF
 	return idx_base - 2, idx_base < 2
 }
+
+func ExtractDestinationIP(packet []byte) uint32 {
+	ip := net.IP(packet[16:20])
+	return binary.BigEndian.Uint32(ip)
+}
+
+func ExtractSourceIP(packet []byte) uint32 {
+	ip := net.IP(packet[12:16])
+	return binary.BigEndian.Uint32(ip)
+}

@@ -146,7 +146,39 @@ func (s *server) transmit() {
 			for idx := range ch {
 				buf := pool.Get(idx)
 				log.Printf("Transmit: got %v bytes\n", buf.size)
+
+				destIP := routing.ExtractDestinationIP(buf.payload[:])
+				peerIndex, e := routing.ExtractIndex(destIP)
+				if e {
+					pool.Release(idx)
+					continue
+				}
+
+				entry := s.table.Lookup(peerIndex)
+				if entry == nil {
+					pool.Release(idx)
+					continue
+				}
+
+				session := *entry.Session.Load()
+				if !session.Active {
+					pool.Release(idx)
+					continue
+				}
+
+				var nonce [32]byte
+				var outBuf buffer
+				crypto.RandomBytes(nonce[:])
+
+				encrypted, e := session.Encrypt(outBuf.payload[:], buf.payload[:])
+				if e {
+					pool.Release(idx)
+					continue
+				}
+
 				pool.Release(idx)
+
+				s.conn.WriteToUDP(encrypted, session.PublicAddr)
 			}
 		}()
 	}
