@@ -86,7 +86,21 @@ func (s *server) receive() {
 					s.conn.WriteToUDP(tx_buf[:], buf.incomingAddr)
 
 				} else if header.Flags&protocol.F_DATA == 1 {
+					session := *entry.Session.Load()
+					if !session.Active {
+						pool.Release(idx)
+						continue
+					}
 
+					var outBuf buffer
+					decrypted, e := session.Decrypt(outBuf.payload[:], buf.payload[:])
+					if e {
+						pool.Release(idx)
+						continue
+					}
+
+					s.tunnel.Write(decrypted) // TODO: add internal routing
+					entry.TransmitCounter.Add(1)
 				}
 
 				pool.Release(idx)
