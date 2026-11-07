@@ -65,7 +65,7 @@ func (s *server) receive() {
 
 					session := *entry.Session.Load()
 					session.Active = true
-					session.PublicAddr = *buf.incomingAddr
+					session.PublicAddr = buf.incomingAddr
 
 					session.ReceiveKey, session.TransmitKey, e = s.cipher.GenerateServerKeys(buf.payload[protocol.HeaderSize:])
 					if e {
@@ -101,6 +101,13 @@ func (s *server) receive() {
 
 					s.tunnel.Write(decrypted) // TODO: add internal routing
 					entry.TransmitCounter.Add(1)
+
+					if session.PublicAddr != buf.incomingAddr {
+						if old := *entry.Session.Load(); old.PublicAddr != buf.incomingAddr { // TODO: add replay check
+							old.PublicAddr = buf.incomingAddr
+							s.table.Store(header.PeerIndex, &old)
+						}
+					}
 				}
 
 				pool.Release(idx)

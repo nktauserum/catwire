@@ -9,7 +9,7 @@ import (
 type Session struct {
 	Active                             bool
 	PublicKey, ReceiveKey, TransmitKey [32]byte
-	PublicAddr                         net.UDPAddr
+	PublicAddr                         *net.UDPAddr
 	LocalAddr                          net.IP
 }
 
