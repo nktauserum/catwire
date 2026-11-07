@@ -21,7 +21,12 @@ func CreateTable(clients []config.Client) *Table {
 	var table Table
 
 	for _, c := range clients {
-		idx, err := ExtractIndex(c.LocalAddr)
+		addr, err := IPAsInteger(c.LocalAddr)
+		if err {
+			continue
+		}
+
+		idx, err := ExtractIndex(addr)
 		if err {
 			continue
 		}
