@@ -23,5 +23,13 @@ func Decrypt(dst, src []byte, key [32]byte) ([]byte, bool) {
 }
 
 func Encrypt(dst, src []byte, key [32]byte) ([]byte, bool) {
-	return nil, true
+	var size uint64
+	ret := C.crypto_aead_aegis256_encrypt(
+		(*C.uchar)(unsafe.Pointer(&dst[0])), (*C.ulonglong)(&size), (*C.uchar)(unsafe.Pointer(uintptr(0))),
+		(*C.uchar)(unsafe.Pointer(&src[protocol.HeaderSize])), (C.ulonglong)(len(src)-protocol.HeaderSize),
+		(*C.uchar)(unsafe.Pointer(&src[0])), (C.ulonglong)(protocol.HeaderSize),
+		(*C.uchar)(unsafe.Pointer(&src[protocol.HeaderSize-32])), (*C.uchar)(&key[0]),
+	)
+
+	return dst[:size], ret < 0
 }
