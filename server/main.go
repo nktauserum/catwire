@@ -94,6 +94,8 @@ func (s *server) receive() {
 		}()
 	}
 
+	log.Printf("Receive loop started: %v workers", runtime.NumCPU())
+
 	var err error
 	for {
 		idx := pool.Acquire()
@@ -127,6 +129,8 @@ func (s *server) transmit() {
 			}
 		}()
 	}
+
+	log.Printf("Transmit loop started: %v workers", runtime.NumCPU())
 
 	var err error
 	for {

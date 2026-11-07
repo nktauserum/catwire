@@ -16,3 +16,7 @@ type Session struct {
 func (s *Session) Decrypt(dst, src []byte) ([]byte, bool) {
 	return crypto.Decrypt(dst, src, s.ReceiveKey)
 }
+
+func (s *Session) Encrypt(dst, src []byte) ([]byte, bool) {
+	return crypto.Encrypt(dst, src, s.TransmitKey)
+}
