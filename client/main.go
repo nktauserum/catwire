@@ -15,6 +15,7 @@ import (
 	"github.com/nktauserum/catwire/common/models"
 	"github.com/nktauserum/catwire/common/protocol"
 	"github.com/nktauserum/catwire/common/session"
+	"github.com/nktauserum/catwire/server/config"
 	"golang.org/x/sys/unix"
 )
 
@@ -172,7 +173,7 @@ func main() {
 		log.Fatalln("error initializing crypto")
 	}
 
-	conf, err := config.ParseConfig("server/config/config.example.ini")
+	conf, err := config.ParseConfig("client/config/config.example.ini")
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -193,7 +194,7 @@ func main() {
 		log.Fatalf("error creating TUN: %v\n", err)
 	}
 
-	c := client{conn, tunnel, cipher}
+	c := client{conn: conn, tunnel: tunnel, cipher: cipher}
 
 	go c.receive()
 	go c.transmit()
