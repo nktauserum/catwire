@@ -67,9 +67,9 @@ func (c *client) receive() {
 					}
 
 					session.Active = true
-					copy(session.PublicKey, buf.payload[protocol.HeaderSize:])
+					copy(session.PublicKey[:], buf.payload[protocol.HeaderSize:])
 
-					c.session.Store(session)
+					c.session.Store(&session)
 
 				} else if header.Flags&protocol.F_DATA == 1 {
 					session := c.session.Load()
@@ -172,17 +172,17 @@ func main() {
 		log.Fatalln("error initializing crypto")
 	}
 
-	c, err := config.ParseConfig("server/config/config.example.ini")
+	conf, err := config.ParseConfig("server/config/config.example.ini")
 	if err != nil {
 		log.Fatalln(err)
 	}
 
-	cipher, e := crypto.CreateCipher(c.Seed)
+	cipher, e := crypto.CreateCipher(conf.Seed)
 	if e {
 		log.Fatalln(err)
 	}
 
-	conn, err := net.ListenUDP("udp", &c.Address)
+	conn, err := net.ListenUDP("udp", &conf.Address)
 	if err != nil {
 		log.Fatalf("error listening: %v\n", err)
 	}
@@ -193,10 +193,10 @@ func main() {
 		log.Fatalf("error creating TUN: %v\n", err)
 	}
 
-	s := client{conn, tunnel, cipher}
+	c := client{conn, tunnel, cipher}
 
-	go s.receive()
-	go s.transmit()
+	go c.receive()
+	go c.transmit()
 
 	term := make(chan os.Signal, 1)
 
