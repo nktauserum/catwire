@@ -14,6 +14,7 @@ import (
 	"github.com/nktauserum/catwire/common/interface/tun"
 	"github.com/nktauserum/catwire/common/models"
 	"github.com/nktauserum/catwire/common/protocol"
+	"github.com/nktauserum/catwire/common/session"
 	"golang.org/x/sys/unix"
 )
 

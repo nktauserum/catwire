@@ -3,6 +3,7 @@ package routing
 import (
 	"sync/atomic"
 
+	"github.com/nktauserum/catwire/common/session"
 	"github.com/nktauserum/catwire/server/config"
 )
 
@@ -10,7 +11,7 @@ const availableClients = 256
 
 type Entry struct {
 	ReceiveCounter, TransmitCounter atomic.Uint64
-	Session                         atomic.Pointer[Session]
+	Session                         atomic.Pointer[session.Session]
 }
 
 type Table struct {
@@ -31,7 +32,7 @@ func CreateTable(clients []config.Client) *Table {
 			continue
 		}
 
-		session := &Session{
+		session := &session.Session{
 			PublicKey: c.PublicKey,
 			LocalAddr: c.LocalAddr,
 			Active:    false,
@@ -51,7 +52,7 @@ func (t *Table) Lookup(idx uint32) *Entry {
 	return &t.lookup[idx]
 }
 
-func (t *Table) Store(idx uint32, session *Session) {
+func (t *Table) Store(idx uint32, session *session.Session) {
 	if idx >= availableClients {
 		return
 	}
