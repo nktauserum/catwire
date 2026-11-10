@@ -57,7 +57,6 @@ func (s *server) receive() {
 					continue
 				}
 
-				var e bool
 				if header.Flags&protocol.F_HANDSHAKE != 0 {
 					log.Printf("Receive: Handshake from %v\n", buf.incomingAddr)
 
@@ -66,7 +65,13 @@ func (s *server) receive() {
 						continue
 					}
 
-					s_ptr := entry.Session.Load()
+					idx, e := s.table.Find(buf.payload[protocol.HeaderSize:])
+					if e {
+						pool.Release(idx)
+						continue
+					}
+
+					s_ptr := s.table.Lookup(idx).Session.Load()
 					if s_ptr == nil {
 						pool.Release(idx)
 						continue

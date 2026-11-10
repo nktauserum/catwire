@@ -1,6 +1,7 @@
 package routing
 
 import (
+	"bytes"
 	"log"
 	"sync/atomic"
 
@@ -46,6 +47,21 @@ func CreateTable(clients []config.Client) *Table {
 	}
 
 	return &table
+}
+
+func (t *Table) Find(key []byte) (uint32, bool) {
+	for idx, _ := range t.lookup {
+		s_ptr := t.lookup[idx].Session.Load()
+		if s_ptr == nil {
+			continue
+		}
+
+		if bytes.Equal(s_ptr.PublicKey[:], key) {
+			return uint32(idx), false
+		}
+	}
+
+	return 0, true
 }
 
 func (t *Table) Lookup(idx uint32) *Entry {
