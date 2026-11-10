@@ -220,6 +220,23 @@ func main() {
 		{"ip", "route", "replace", "10.0.5.0/24", "dev", "cw0"},
 	}
 
+	if conf.ForwardAll {
+		serverIP, _, err := net.SplitHostPort(conf.ServerAddr.String())
+		if err != nil {
+			log.Fatalf("Error parsing server address, check it: %v\n", err)
+		}
+
+		rules := [][]string{
+			{"ip", "route", "add", "default", "dev", "cw0", "table", "100"},
+			{"ip", "rule", "add", "priority", "100", "to", serverIP, "lookup", "main"},
+			{"ip", "rule", "add", "priority", "200", "lookup", "100"},
+			{"ip", "rule", "add", "priority", "111", "to", "172.16.0.0/12", "lookup", "main"},
+			{"ip", "rule", "add", "priority", "112", "to", "192.168.0.0/16", "lookup", "main"},
+		}
+
+		cmds = append(cmds, rules...)
+	}
+
 	for _, cmd := range cmds {
 		out, err := exec.Command(cmd[0], cmd[1:]...).CombinedOutput()
 		if err != nil {
@@ -251,4 +268,22 @@ func main() {
 	}
 
 	fmt.Println("\nShutdown")
+
+	if !conf.ForwardAll {
+		return
+	}
+
+	cmds = [][]string{
+		{"ip", "rule", "del", "priority", "112"},
+		{"ip", "rule", "del", "priority", "111"},
+		{"ip", "rule", "del", "priority", "200"},
+		{"ip", "rule", "del", "priority", "100"},
+	}
+
+	for _, cmd := range cmds {
+		out, err := exec.Command(cmd[0], cmd[1:]...).CombinedOutput()
+		if err != nil {
+			log.Printf("Failed to run %v: %v, output: %s", cmd, err, string(out))
+		}
+	}
 }
