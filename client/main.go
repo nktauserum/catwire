@@ -82,7 +82,7 @@ func (c *client) receive() {
 					}
 
 					var outBuf buffer
-					decrypted, e := session.Decrypt(outBuf.payload[:], buf.payload[:])
+					decrypted, e := session.Decrypt(outBuf.payload[:], buf.payload[:buf.size])
 					if e {
 						pool.Release(idx)
 						continue
