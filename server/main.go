@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"os/exec"
 	"os/signal"
 	"runtime"
 
@@ -17,6 +18,8 @@ import (
 	"github.com/nktauserum/catwire/server/routing"
 	"golang.org/x/sys/unix"
 )
+
+const ipAddr = "10.0.5.1"
 
 type server struct {
 	conn   *net.UDPConn
@@ -226,6 +229,23 @@ func main() {
 	tunnel, err := tun.CreateTUN("cw0")
 	if err != nil {
 		log.Fatalf("error creating TUN: %v\n", err)
+	}
+
+	cmds := [][]string{
+		{"ip", "link", "set", "cw0", "up"},
+		{"ip", "addr", "add", ipAddr + "/24", "dev", "cw0"},
+		{"ip", "link", "set", "dev", "cw0", "mtu", "1420"},
+		{"iptables", "-t", "nat", "-A", "POSTROUTING", "-o", "eth0", "-j", "MASQUERADE"},
+		{"iptables", "-A", "FORWARD", "-i", "cw0", "-j", "ACCEPT"},
+		{"iptables", "-A", "FORWARD", "-o", "cw0", "-j", "ACCEPT"},
+		{"sysctl", "-w", "net.ipv4.ip_forward=1"},
+	}
+
+	for _, cmd := range cmds {
+		out, err := exec.Command(cmd[0], cmd[1:]...).CombinedOutput()
+		if err != nil {
+			log.Fatalf("Failed to run %v: %v, output: %s", cmd, err, string(out))
+		}
 	}
 
 	s := server{conn, tunnel, table, cipher}
