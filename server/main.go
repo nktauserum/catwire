@@ -120,7 +120,7 @@ func (s *server) receive() {
 						continue
 					}
 
-					s.tunnel.Write(decrypted) // TODO: add internal routing
+					s.tunnel.Write(outBuf.payload[:decrypted]) // TODO: add internal routing
 					entry.TransmitCounter.Add(1)
 
 					if session.PublicAddr != buf.incomingAddr {
@@ -193,9 +193,11 @@ func (s *server) transmit() {
 					continue
 				}
 
-				var nonce [32]byte
 				var outBuf buffer
-				crypto.RandomBytes(nonce[:])
+				binary.BigEndian.PutUint32(outBuf.payload[0:4], protocol.F_DATA)
+				binary.BigEndian.PutUint32(outBuf.payload[4:8], session.PeerIndex)
+				binary.BigEndian.PutUint64(outBuf.payload[8:16], entry.TransmitCounter.Add(1)-1)
+				crypto.RandomBytes(outBuf.payload[16:protocol.HeaderSize])
 
 				encrypted, e := session.Encrypt(outBuf.payload[:], buf.payload[:buf.size])
 				if e {
@@ -205,7 +207,7 @@ func (s *server) transmit() {
 
 				pool.Release(idx)
 
-				s.conn.WriteToUDP(encrypted, session.PublicAddr)
+				s.conn.WriteToUDP(outBuf.payload[:encrypted], session.PublicAddr)
 			}
 		}()
 	}

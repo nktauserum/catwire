@@ -52,9 +52,9 @@ func CreateTable(clients []config.Client) *Table {
 func (t *Table) Find(key []byte) (uint32, bool) {
 	for idx := range t.lookup {
 		s := t.lookup[idx].Session.Load()
-        if s != nil && bytes.Equal(s.PublicKey[:], key) {
-            return uint32(idx), false 
-        }
+		if s != nil && bytes.Equal(s.PublicKey[:], key) {
+			return uint32(idx), false
+		}
 	}
 
 	return 0, true

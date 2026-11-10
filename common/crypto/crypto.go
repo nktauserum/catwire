@@ -6,31 +6,29 @@ package crypto
 import "C"
 import (
 	"unsafe"
-
-	"github.com/nktauserum/catwire/common/protocol"
 )
 
-func Decrypt(dst, src []byte, key [32]byte) ([]byte, bool) {
+func Decrypt(dst, src, ad, nonce []byte, key [32]byte) (uint64, bool) {
 	var size uint64
 	ret := C.crypto_aead_aegis256_decrypt(
-		(*C.uchar)(unsafe.Pointer(&dst[0])), (*C.ulonglong)(&size), (*C.uchar)(unsafe.Pointer(uintptr(0))),
-		(*C.uchar)(unsafe.Pointer(&src[protocol.HeaderSize])), (C.ulonglong)(len(src)-protocol.HeaderSize),
-		(*C.uchar)(unsafe.Pointer(&src[0])), (C.ulonglong)(protocol.HeaderSize),
-		(*C.uchar)(unsafe.Pointer(&src[protocol.HeaderSize-32])), (*C.uchar)(&key[0]),
+		(*C.uchar)(unsafe.Pointer(&dst[0])), (*C.ulonglong)(&size), (*C.uchar)(unsafe.Pointer(uintptr(0))), // dst
+		(*C.uchar)(unsafe.Pointer(&src[0])), (C.ulonglong)(len(src)), // src
+		(*C.uchar)(unsafe.Pointer(&ad[0])), (C.ulonglong)(len(ad)), // ad
+		(*C.uchar)(unsafe.Pointer(&nonce[0])), (*C.uchar)(&key[0]), // nonce and key
 	) // TODO: add fallback
 
-	return dst[:size], ret < 0
+	return size, ret < 0
 }
 
-func Encrypt(dst, src []byte, key [32]byte) ([]byte, bool) {
+func Encrypt(dst, src, ad, nonce []byte, key [32]byte) (uint64, bool) {
 	var size uint64
 	ret := C.crypto_aead_aegis256_encrypt(
-		(*C.uchar)(unsafe.Pointer(&dst[0])), (*C.ulonglong)(&size),
-		(*C.uchar)(unsafe.Pointer(&src[protocol.HeaderSize])), (C.ulonglong)(len(src)-protocol.HeaderSize),
-		(*C.uchar)(unsafe.Pointer(&src[0])), (C.ulonglong)(protocol.HeaderSize),
-		(*C.uchar)(unsafe.Pointer(uintptr(0))),
-		(*C.uchar)(unsafe.Pointer(&src[protocol.HeaderSize-32])), (*C.uchar)(&key[0]),
+		(*C.uchar)(unsafe.Pointer(&dst[0])), (*C.ulonglong)(&size), // dst
+		(*C.uchar)(unsafe.Pointer(&src[0])), (C.ulonglong)(len(src)), // src
+		(*C.uchar)(unsafe.Pointer(&ad[0])), (C.ulonglong)(len(ad)), // ad
+		(*C.uchar)(unsafe.Pointer(uintptr(0))),                     // nsec is never used
+		(*C.uchar)(unsafe.Pointer(&nonce[0])), (*C.uchar)(&key[0]), // nonce and key
 	)
 
-	return dst[:size], ret < 0
+	return size, ret < 0
 }
