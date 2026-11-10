@@ -42,7 +42,6 @@ func (s *server) receive() {
 		go func() {
 			for idx := range ch {
 				buf := pool.Get(idx)
-				log.Printf("Receive: got %v bytes\n", buf.size)
 
 				header := protocol.Header{
 					Flags:     binary.BigEndian.Uint32(buf.payload[0:4]),
@@ -179,8 +178,6 @@ func (s *server) transmit() {
 					continue
 				}
 
-				log.Printf("Transmit: %v bytes to %v (idx %v)\n", buf.size, destIP, peerIndex)
-
 				entry := s.table.Lookup(peerIndex)
 				if entry == nil {
 					pool.Release(idx)
@@ -215,7 +212,6 @@ func (s *server) transmit() {
 				pool.Release(idx)
 
 				s.conn.WriteToUDP(outBuf.payload[:encrypted+uint64(protocol.HeaderSize)], session.PublicAddr)
-				log.Printf("Transmit: sent %v bytes\n", encrypted+uint64(protocol.HeaderSize))
 
 			}
 		}()
