@@ -215,7 +215,7 @@ func main() {
 
 	cmds := [][]string{
 		{"ip", "link", "set", "cw0", "up"},
-		{"ip", "addr", "add", string(conf.LocalAddr) + "/32", "dev", "cw0"},
+		{"ip", "addr", "add", conf.LocalAddr.String() + "/32", "dev", "cw0"},
 		{"ip", "link", "set", "dev", "cw0", "mtu", "1420"},
 		{"ip", "route", "replace", "10.0.5.0/24", "dev", "cw0"},
 	}
