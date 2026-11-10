@@ -65,13 +65,20 @@ func (s *server) receive() {
 						continue
 					}
 
-					idx, e := s.table.Find(buf.payload[protocol.HeaderSize:])
+					idx, e := s.table.Find(buf.payload[protocol.HeaderSize:buf.size])
 					if e {
+						log.Printf("Couldn't find an available session for %v\n", buf.incomingAddr)
 						pool.Release(idx)
 						continue
 					}
 
-					s_ptr := s.table.Lookup(idx).Session.Load()
+					entry = s.table.Lookup(idx)
+					if entry == nil {
+						pool.Release(idx)
+						continue
+					}
+
+					s_ptr := entry.Session.Load()
 					if s_ptr == nil {
 						pool.Release(idx)
 						continue
@@ -107,7 +114,7 @@ func (s *server) receive() {
 					}
 
 					var outBuf buffer
-					decrypted, e := session.Decrypt(outBuf.payload[:], buf.payload[:])
+					decrypted, e := session.Decrypt(outBuf.payload[:], buf.payload[:buf.size])
 					if e {
 						pool.Release(idx)
 						continue
@@ -190,7 +197,7 @@ func (s *server) transmit() {
 				var outBuf buffer
 				crypto.RandomBytes(nonce[:])
 
-				encrypted, e := session.Encrypt(outBuf.payload[:], buf.payload[:])
+				encrypted, e := session.Encrypt(outBuf.payload[:], buf.payload[:buf.size])
 				if e {
 					pool.Release(idx)
 					continue

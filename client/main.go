@@ -179,7 +179,7 @@ func (c *client) handshake() {
 	addr := c.session.Load().PublicAddr
 	c.conn.WriteToUDP(buf[:], addr)
 
-	log.Printf("Dialing to %v..\n", addr)
+	log.Printf("Dialing to %v...\n", addr)
 }
 
 func main() {

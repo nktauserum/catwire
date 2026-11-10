@@ -50,15 +50,11 @@ func CreateTable(clients []config.Client) *Table {
 }
 
 func (t *Table) Find(key []byte) (uint32, bool) {
-	for idx, _ := range t.lookup {
-		s_ptr := t.lookup[idx].Session.Load()
-		if s_ptr == nil {
-			continue
-		}
-
-		if bytes.Equal(s_ptr.PublicKey[:], key) {
-			return uint32(idx), false
-		}
+	for idx := range t.lookup {
+		s := t.lookup[idx].Session.Load()
+        if s != nil && bytes.Equal(s.PublicKey[:], key) {
+            return uint32(idx), false 
+        }
 	}
 
 	return 0, true
