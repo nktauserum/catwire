@@ -53,7 +53,7 @@ func (c *client) receive() {
 				}
 
 				var e bool
-				if header.Flags&protocol.F_HANDSHAKE == 1 {
+				if header.Flags&protocol.F_HANDSHAKE != 0 {
 					log.Println("Receive: Handshake response")
 
 					if buf.size != protocol.HeaderSize+protocol.HandshakeSize {
@@ -73,7 +73,7 @@ func (c *client) receive() {
 
 					c.session.Store(&session)
 
-				} else if header.Flags&protocol.F_DATA == 1 {
+				} else if header.Flags&protocol.F_DATA != 0 {
 					session := c.session.Load()
 					if !session.Active {
 						pool.Release(idx)

@@ -58,7 +58,7 @@ func (s *server) receive() {
 				}
 
 				var e bool
-				if header.Flags&protocol.F_HANDSHAKE == 1 {
+				if header.Flags&protocol.F_HANDSHAKE != 0 {
 					log.Printf("Receive: Handshake from %v\n", buf.incomingAddr)
 
 					if buf.size != protocol.HeaderSize+protocol.HandshakeSize {
@@ -66,7 +66,13 @@ func (s *server) receive() {
 						continue
 					}
 
-					session := *entry.Session.Load()
+					s_ptr := entry.Session.Load()
+					if s_ptr == nil {
+						pool.Release(idx)
+						continue
+					}
+
+					session := *s_ptr
 					session.Active = true
 					session.PublicAddr = buf.incomingAddr
 
@@ -88,7 +94,7 @@ func (s *server) receive() {
 
 					s.conn.WriteToUDP(tx_buf[:], buf.incomingAddr)
 
-				} else if header.Flags&protocol.F_DATA == 1 {
+				} else if header.Flags&protocol.F_DATA != 0 {
 					session := *entry.Session.Load()
 					if !session.Active {
 						pool.Release(idx)
