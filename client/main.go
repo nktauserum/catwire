@@ -146,6 +146,7 @@ func (c *client) transmit() {
 				pool.Release(idx)
 
 				c.conn.WriteToUDP(encrypted, session.PublicAddr)
+				c.transmitCounter.Add(1)
 			}
 		}()
 	}
@@ -204,6 +205,7 @@ func main() {
 	session := &session.Session{
 		Active:     false,
 		PublicAddr: &conf.ServerAddr, // TODO: add local address
+		LocalAddr:  conf.LocalAddr,
 	}
 
 	c.session.Store(session)

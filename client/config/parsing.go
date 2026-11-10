@@ -49,6 +49,9 @@ func ParseConfig(path string) (Config, error) {
 			}
 			copy(config.Seed[:], seed)
 
+		case "local_address":
+			config.LocalAddr = net.ParseIP(value)
+
 		case "server_address":
 			addr, err := net.ResolveUDPAddr("udp", value)
 			if err != nil {
