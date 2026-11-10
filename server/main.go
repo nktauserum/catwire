@@ -94,7 +94,7 @@ func (s *server) receive() {
 						continue
 					}
 
-					s.table.Store(header.PeerIndex, &session)
+					s.table.Store(idx, &session)
 
 					var tx_buf [protocol.HeaderSize + protocol.HandshakeSize]byte
 
@@ -107,7 +107,13 @@ func (s *server) receive() {
 					s.conn.WriteToUDP(tx_buf[:], buf.incomingAddr)
 
 				} else if header.Flags&protocol.F_DATA != 0 {
-					session := *entry.Session.Load()
+					s_ptr := entry.Session.Load()
+					if s_ptr == nil {
+						pool.Release(idx)
+						continue
+					}
+
+					session := *s_ptr
 					if !session.Active {
 						pool.Release(idx)
 						continue
