@@ -58,6 +58,14 @@ func ParseConfig(path string) (Config, error) {
 				return config, err
 			}
 			config.ServerAddr = *addr
+
+		case "forward_all":
+			switch value {
+			case "true":
+				config.ForwardAll = true
+			case "false":
+				config.ForwardAll = false
+			}
 		}
 	}
 	if err := scanner.Err(); err != nil {
