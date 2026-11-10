@@ -10,12 +10,12 @@ import (
 	"runtime"
 	"sync/atomic"
 
+	"github.com/nktauserum/catwire/client/config"
 	"github.com/nktauserum/catwire/common/crypto"
 	"github.com/nktauserum/catwire/common/interface/tun"
 	"github.com/nktauserum/catwire/common/models"
 	"github.com/nktauserum/catwire/common/protocol"
 	"github.com/nktauserum/catwire/common/session"
-	"github.com/nktauserum/catwire/server/config"
 	"golang.org/x/sys/unix"
 )
 
@@ -183,7 +183,12 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	conn, err := net.ListenUDP("udp", &conf.Address)
+	addr, err := net.ResolveUDPAddr("udp", ":0")
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	conn, err := net.ListenUDP("udp", addr)
 	if err != nil {
 		log.Fatalf("error listening: %v\n", err)
 	}
@@ -195,6 +200,13 @@ func main() {
 	}
 
 	c := client{conn: conn, tunnel: tunnel, cipher: cipher}
+
+	session := &session.Session{
+		Active:     false,
+		PublicAddr: &conf.ServerAddr, // TODO: add local address
+	}
+
+	c.session.Store(session)
 
 	go c.receive()
 	go c.transmit()
