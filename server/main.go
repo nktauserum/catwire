@@ -188,6 +188,7 @@ func (s *server) transmit() {
 				}
 
 				session := *s_ptr
+				log.Printf("Session: %#v\n", session)
 				if !session.Active {
 					pool.Release(idx)
 					continue
@@ -201,13 +202,16 @@ func (s *server) transmit() {
 
 				encrypted, e := session.Encrypt(outBuf.payload[:], buf.payload[:buf.size])
 				if e {
+					log.Println("Error encrypt the packet")
 					pool.Release(idx)
 					continue
 				}
 
 				pool.Release(idx)
 
-				s.conn.WriteToUDP(outBuf.payload[:encrypted], session.PublicAddr)
+				s.conn.WriteToUDP(outBuf.payload[:encrypted+uint64(protocol.HeaderSize)], session.PublicAddr)
+				log.Printf("Transmit: sent %v bytes\n", encrypted+uint64(protocol.HeaderSize))
+
 			}
 		}()
 	}
