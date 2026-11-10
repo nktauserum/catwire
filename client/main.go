@@ -67,6 +67,7 @@ func (c *client) receive() {
 						pool.Release(idx)
 						continue
 					}
+					session.PeerIndex = header.PeerIndex
 
 					session.Active = true
 					copy(session.PublicKey[:], buf.payload[protocol.HeaderSize:])

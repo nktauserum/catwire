@@ -58,8 +58,6 @@ func (s *server) receive() {
 				}
 
 				if header.Flags&protocol.F_HANDSHAKE != 0 {
-					log.Printf("Receive: Handshake from %v\n", buf.incomingAddr)
-
 					if buf.size != protocol.HeaderSize+protocol.HandshakeSize {
 						pool.Release(idx)
 						continue
@@ -105,6 +103,8 @@ func (s *server) receive() {
 					copy(tx_buf[protocol.HeaderSize:], s.cipher.PublicKey[:])
 
 					s.conn.WriteToUDP(tx_buf[:], buf.incomingAddr)
+
+					log.Printf("Receive: Handshake from %v\n", buf.incomingAddr)
 
 				} else if header.Flags&protocol.F_DATA != 0 {
 					s_ptr := entry.Session.Load()
@@ -172,14 +172,14 @@ func (s *server) transmit() {
 		go func() {
 			for idx := range ch {
 				buf := pool.Get(idx)
-				log.Printf("Transmit: got %v bytes\n", buf.size)
-
 				destIP := routing.ExtractDestinationIP(buf.payload[:])
-				peerIndex, e := routing.ExtractIndex(destIP)
-				if e {
+				peerIndex, ok := routing.ExtractIndex(destIP)
+				if !ok {
 					pool.Release(idx)
 					continue
 				}
+
+				log.Printf("Transmit: %v bytes to %v (idx %v)\n", buf.size, destIP, peerIndex)
 
 				entry := s.table.Lookup(peerIndex)
 				if entry == nil {
@@ -194,7 +194,6 @@ func (s *server) transmit() {
 				}
 
 				session := *s_ptr
-				log.Printf("Session: %#v\n", session)
 				if !session.Active {
 					pool.Release(idx)
 					continue

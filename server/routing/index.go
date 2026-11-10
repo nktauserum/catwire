@@ -15,7 +15,7 @@ func IPAsInteger(addr net.IP) (uint32, bool) {
 
 func ExtractIndex(addr uint32) (uint32, bool) {
 	idx_base := addr >> 24
-	return idx_base - 2, idx_base < 2
+	return idx_base - 2, idx_base >= 2
 }
 
 func ExtractDestinationIP(packet []byte) uint32 {

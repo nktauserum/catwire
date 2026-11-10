@@ -29,8 +29,8 @@ func CreateTable(clients []config.Client) *Table {
 			continue
 		}
 
-		idx, err := ExtractIndex(addr)
-		if err {
+		idx, ok := ExtractIndex(addr)
+		if !ok {
 			log.Printf("Error adding the entry: idx %v, addr %v\n", idx, c.LocalAddr)
 			continue
 		}
