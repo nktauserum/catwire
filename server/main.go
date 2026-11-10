@@ -206,7 +206,7 @@ func main() {
 		log.Fatalln("error initializing crypto")
 	}
 
-	c, err := config.ParseConfig("server/config/config.example.ini")
+	c, err := config.ParseConfig("server/config.ini")
 	if err != nil {
 		log.Fatalln(err)
 	}

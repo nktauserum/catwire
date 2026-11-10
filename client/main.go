@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"os/exec"
 	"os/signal"
 	"runtime"
 	"sync/atomic"
@@ -169,7 +170,7 @@ func (c *client) transmit() {
 }
 
 func (c *client) handshake() {
-	var buf [protocol.HeaderSize+protocol.HandshakeSize]byte
+	var buf [protocol.HeaderSize + protocol.HandshakeSize]byte
 
 	binary.BigEndian.PutUint32(buf[0:4], protocol.F_HANDSHAKE)
 	copy(buf[protocol.HeaderSize:], c.cipher.PublicKey[:])
@@ -186,7 +187,7 @@ func main() {
 		log.Fatalln("error initializing crypto")
 	}
 
-	conf, err := config.ParseConfig("client/config/config.example.ini")
+	conf, err := config.ParseConfig("client/config.ini")
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -210,6 +211,20 @@ func main() {
 	tunnel, err := tun.CreateTUN("cw0")
 	if err != nil {
 		log.Fatalf("error creating TUN: %v\n", err)
+	}
+
+	cmds := [][]string{
+		{"ip", "link", "set", "cw0", "up"},
+		{"ip", "addr", "add", string(conf.LocalAddr) + "/32", "dev", "cw0"},
+		{"ip", "link", "set", "dev", "cw0", "mtu", "1420"},
+		{"ip", "route", "replace", "10.0.5.0/24", "dev", "cw0"},
+	}
+
+	for _, cmd := range cmds {
+		out, err := exec.Command(cmd[0], cmd[1:]...).CombinedOutput()
+		if err != nil {
+			log.Printf("Failed to run %v: %v, output: %s", cmd, err, string(out))
+		}
 	}
 
 	c := client{conn: conn, tunnel: tunnel, cipher: cipher}
