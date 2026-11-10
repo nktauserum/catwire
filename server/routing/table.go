@@ -1,6 +1,7 @@
 package routing
 
 import (
+	"log"
 	"sync/atomic"
 
 	"github.com/nktauserum/catwire/common/session"
@@ -29,6 +30,7 @@ func CreateTable(clients []config.Client) *Table {
 
 		idx, err := ExtractIndex(addr)
 		if err {
+			log.Printf("Error adding the entry: idx %v, addr %v\n", idx, c.LocalAddr)
 			continue
 		}
 
@@ -37,6 +39,8 @@ func CreateTable(clients []config.Client) *Table {
 			LocalAddr: c.LocalAddr,
 			Active:    false,
 		}
+
+		log.Printf("Entry: idx %v, addr %v\n", idx, c.LocalAddr)
 
 		table.Store(idx, session)
 	}
