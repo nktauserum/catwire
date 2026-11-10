@@ -168,6 +168,18 @@ func (c *client) transmit() {
 	}
 }
 
+func (c *client) handshake() {
+	var buf [protocol.HeaderSize+protocol.HandshakeSize]byte
+
+	binary.BigEndian.PutUint32(buf[0:4], protocol.F_HANDSHAKE)
+	copy(buf[protocol.HeaderSize:], c.cipher.PublicKey[:])
+
+	addr := c.session.Load().PublicAddr
+	c.conn.WriteToUDP(buf[:], addr)
+
+	log.Printf("Dialing to %v..\n", addr)
+}
+
 func main() {
 	e := crypto.Init()
 	if e {
@@ -210,6 +222,7 @@ func main() {
 
 	c.session.Store(session)
 
+	go c.handshake()
 	go c.receive()
 	go c.transmit()
 
