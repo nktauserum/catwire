@@ -235,12 +235,16 @@ func (s *server) transmit() {
 }
 
 func main() {
+	if len(os.Args) <= 1 {
+		log.Fatalln("pls provide a config")
+	}
+
 	e := crypto.Init()
 	if e {
 		log.Fatalln("error initializing crypto")
 	}
 
-	c, err := config.ParseConfig("server/config.ini")
+	c, err := config.ParseConfig(os.Args[1])
 	if err != nil {
 		log.Fatalln(err)
 	}
