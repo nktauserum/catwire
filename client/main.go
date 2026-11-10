@@ -126,7 +126,6 @@ func (c *client) transmit() {
 		go func() {
 			for idx := range ch {
 				buf := pool.Get(idx)
-				log.Printf("Transmit: got %v bytes\n", buf.size)
 
 				session := *c.session.Load()
 				if !session.Active {
@@ -138,7 +137,7 @@ func (c *client) transmit() {
 				var outBuf buffer
 				crypto.RandomBytes(nonce[:])
 
-				encrypted, e := session.Encrypt(outBuf.payload[:], buf.payload[:])
+				encrypted, e := session.Encrypt(outBuf.payload[:], buf.payload[:buf.size])
 				if e {
 					pool.Release(idx)
 					continue
@@ -148,6 +147,8 @@ func (c *client) transmit() {
 
 				c.conn.WriteToUDP(encrypted, session.PublicAddr)
 				c.transmitCounter.Add(1)
+
+				log.Printf("Transmit: got %v bytes, sent %v bytes\n", buf.size, len(encrypted))
 			}
 		}()
 	}
