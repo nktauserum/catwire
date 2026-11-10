@@ -163,7 +163,13 @@ func (s *server) transmit() {
 					continue
 				}
 
-				session := *entry.Session.Load()
+				s_ptr := entry.Session.Load()
+				if s_ptr == nil {
+					pool.Release(idx)
+					continue
+				}
+
+				session := *s_ptr
 				if !session.Active {
 					pool.Release(idx)
 					continue
