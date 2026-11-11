@@ -2,6 +2,7 @@ package routing
 
 import (
 	"bytes"
+	"encoding/binary"
 	"log"
 	"sync/atomic"
 
@@ -24,12 +25,7 @@ func CreateTable(clients []config.Client) *Table {
 	var table Table
 
 	for _, c := range clients {
-		addr, err := IPAsInteger(c.LocalAddr)
-		if err {
-			continue
-		}
-
-		idx, ok := ExtractIndex(addr)
+		idx, ok := ExtractIndex(binary.LittleEndian.Uint32(c.LocalAddr.To4()))
 		if !ok {
 			log.Printf("Error adding the entry: idx %v, addr %v\n", idx, c.LocalAddr)
 			continue
@@ -41,7 +37,7 @@ func CreateTable(clients []config.Client) *Table {
 			Active:    false,
 		}
 
-		log.Printf("Entry: idx %v, addr %v\n", idx, addr)
+		log.Printf("Entry: idx %v, addr %v\n", idx, c.LocalAddr)
 
 		table.Store(idx, session)
 	}

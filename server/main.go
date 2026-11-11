@@ -19,13 +19,14 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-const ipAddr = "10.0.5.1"
-
 type server struct {
 	conn   *net.UDPConn
 	tunnel *tun.TUN
 	table  *routing.Table
 	cipher *crypto.Cipher
+
+	transmitPool *models.Pool[buffer]
+	transmitCh   chan uint32
 }
 
 type buffer struct {
@@ -104,6 +105,7 @@ func (s *server) receive() {
 					s.conn.WriteToUDP(tx_buf[:], buf.incomingAddr)
 
 					log.Printf("Receive: Handshake from %v\n", buf.incomingAddr)
+					pool.Release(idx)
 
 				} else if header.Flags&protocol.F_DATA != 0 {
 					s_ptr := entry.Session.Load()
@@ -118,25 +120,34 @@ func (s *server) receive() {
 						continue
 					}
 
-					var outBuf buffer
+					outIdx := s.transmitPool.Acquire()
+					outBuf := s.transmitPool.Get(outIdx)
 					decrypted, e := session.Decrypt(outBuf.payload[:], buf.payload[:buf.size])
 					if e {
 						pool.Release(idx)
 						continue
 					}
 
-					s.tunnel.Write(outBuf.payload[:decrypted]) // TODO: add internal routing
-					entry.TransmitCounter.Add(1)
+					addr := buf.incomingAddr
 
-					if session.PublicAddr != buf.incomingAddr {
-						if old := *entry.Session.Load(); old.PublicAddr != buf.incomingAddr { // TODO: add replay check
-							old.PublicAddr = buf.incomingAddr
+					entry.TransmitCounter.Add(1)
+					pool.Release(idx)
+
+					if routing.IsInternal(outBuf.payload[:decrypted]) {
+						log.Println("Case internal routing")
+						s.transmitCh <- outIdx
+						continue
+					}
+
+					s.tunnel.Write(outBuf.payload[:decrypted])
+
+					if session.PublicAddr != addr {
+						if old := *entry.Session.Load(); old.PublicAddr != addr { // TODO: add replay check
+							old.PublicAddr = addr
 							s.table.Store(header.PeerIndex, &old)
 						}
 					}
 				}
-
-				pool.Release(idx)
 			}
 		}()
 	}
@@ -169,51 +180,64 @@ func (s *server) transmit() {
 
 	for range runtime.NumCPU() {
 		go func() {
-			for idx := range ch {
-				buf := pool.Get(idx)
-				destIP := routing.ExtractDestinationIP(buf.payload[:buf.size])
-				peerIndex, ok := routing.ExtractIndex(destIP)
-				if !ok {
-					pool.Release(idx)
-					continue
-				}
+			for {
+				func() {
 
-				entry := s.table.Lookup(peerIndex)
-				if entry == nil {
-					pool.Release(idx)
-					continue
-				}
+					var buf *buffer
+					select {
+					case idx, ok := <-ch:
+						if !ok {
+							return
+						}
 
-				s_ptr := entry.Session.Load()
-				if s_ptr == nil {
-					pool.Release(idx)
-					continue
-				}
+						buf = pool.Get(idx)
+						defer pool.Release(idx)
+					case idx, ok := <-s.transmitCh:
+						if !ok {
+							return
+						}
 
-				session := *s_ptr
-				if !session.Active {
-					pool.Release(idx)
-					continue
-				}
+						buf = s.transmitPool.Get(idx)
+						defer s.transmitPool.Release(idx)
+					}
 
-				var outBuf buffer
-				binary.BigEndian.PutUint32(outBuf.payload[0:4], protocol.F_DATA)
-				binary.BigEndian.PutUint32(outBuf.payload[4:8], session.PeerIndex)
-				binary.BigEndian.PutUint64(outBuf.payload[8:16], entry.TransmitCounter.Add(1)-1)
-				crypto.RandomBytes(outBuf.payload[16:protocol.HeaderSize])
+					destIP := routing.ExtractDestinationIP(buf.payload[:buf.size])
+					peerIndex, ok := routing.ExtractIndex(destIP)
+					if !ok {
+						return
+					}
 
-				encrypted, e := session.Encrypt(outBuf.payload[:], buf.payload[:buf.size])
-				if e {
-					log.Println("Error encrypt the packet")
-					pool.Release(idx)
-					continue
-				}
+					entry := s.table.Lookup(peerIndex)
+					if entry == nil {
+						return
+					}
 
-				pool.Release(idx)
+					s_ptr := entry.Session.Load()
+					if s_ptr == nil {
+						return
+					}
 
-				s.conn.WriteToUDP(outBuf.payload[:encrypted+uint64(protocol.HeaderSize)], session.PublicAddr)
+					session := *s_ptr
+					if !session.Active {
+						return
+					}
 
-				log.Printf("Transmit: %v bytes to idx %v\n", encrypted+uint64(protocol.HeaderSize), peerIndex)
+					var outBuf buffer
+					binary.BigEndian.PutUint32(outBuf.payload[0:4], protocol.F_DATA)
+					binary.BigEndian.PutUint32(outBuf.payload[4:8], session.PeerIndex)
+					binary.BigEndian.PutUint64(outBuf.payload[8:16], entry.TransmitCounter.Add(1)-1)
+					crypto.RandomBytes(outBuf.payload[16:protocol.HeaderSize])
+
+					encrypted, e := session.Encrypt(outBuf.payload[:], buf.payload[:buf.size])
+					if e {
+						log.Println("Error encrypt the packet")
+						return
+					}
+
+					s.conn.WriteToUDP(outBuf.payload[:encrypted+uint64(protocol.HeaderSize)], session.PublicAddr)
+
+					log.Printf("Transmit: %v bytes to idx %v\n", encrypted+uint64(protocol.HeaderSize), peerIndex)
+				}()
 			}
 		}()
 	}
@@ -269,7 +293,7 @@ func main() {
 
 	cmds := [][]string{
 		{"ip", "link", "set", "cw0", "up"},
-		{"ip", "addr", "add", ipAddr + "/24", "dev", "cw0"},
+		{"ip", "addr", "add", "10.0.5.1/24", "dev", "cw0"},
 		{"ip", "link", "set", "dev", "cw0", "mtu", "1420"},
 		{"iptables", "-t", "nat", "-A", "POSTROUTING", "-o", "eth0", "-j", "MASQUERADE"},
 		{"iptables", "-A", "FORWARD", "-i", "cw0", "-j", "ACCEPT"},
@@ -284,7 +308,10 @@ func main() {
 		}
 	}
 
-	s := server{conn, tunnel, table, cipher}
+	transmitPool := models.CreatePool[buffer]()
+	transmitCh := make(chan uint32, 1024)
+
+	s := server{conn, tunnel, table, cipher, transmitPool, transmitCh}
 
 	go s.receive()
 	go s.transmit()

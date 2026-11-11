@@ -2,24 +2,20 @@ package routing
 
 import (
 	"encoding/binary"
-	"net"
 )
 
-func IPAsInteger(addr net.IP) (uint32, bool) {
-	ipv4 := addr.To4()
-	if ipv4 != nil {
-		return binary.LittleEndian.Uint32(ipv4), false
-	}
-	return 0, true
-}
-
-func ExtractIndex(addr uint32) (uint32, bool) {
-	idx_base := addr >> 24
-	return idx_base - 2, idx_base >= 2
-}
-
 func ExtractDestinationIP(packet []byte) uint32 {
-	ip := net.IP(packet[16:20])
-	return binary.LittleEndian.Uint32(ip)
+	return binary.LittleEndian.Uint32(packet[16:20])
 }
 
+func ExtractIndex(ip uint32) (idx uint32, ok bool) {
+	host := (ip >> 24) & 0xFF
+	if host < 2 {
+		return 0, false
+	}
+	return host - 2, true
+}
+
+func IsInternal(packet []byte) bool {
+	return false
+}
