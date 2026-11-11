@@ -171,7 +171,7 @@ func (s *server) transmit() {
 		go func() {
 			for idx := range ch {
 				buf := pool.Get(idx)
-				destIP := routing.ExtractDestinationIP(buf.payload[:])
+				destIP := routing.ExtractDestinationIP(buf.payload[:buf.size])
 				peerIndex, ok := routing.ExtractIndex(destIP)
 				if !ok {
 					pool.Release(idx)

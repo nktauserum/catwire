@@ -41,7 +41,7 @@ func CreateTable(clients []config.Client) *Table {
 			Active:    false,
 		}
 
-		log.Printf("Entry: idx %v, addr %v\n", idx, c.LocalAddr)
+		log.Printf("Entry: idx %v, addr %v\n", idx, addr)
 
 		table.Store(idx, session)
 	}
