@@ -138,8 +138,8 @@ func (s *server) receive() {
 						s.transmitCh <- outIdx
 						continue
 					}
-
 					s.tunnel.Write(outBuf.payload[:decrypted])
+					s.transmitPool.Release(outIdx)
 
 					if session.PublicAddr != addr {
 						if old := *entry.Session.Load(); old.PublicAddr != addr { // TODO: add replay check
@@ -235,8 +235,6 @@ func (s *server) transmit() {
 					}
 
 					s.conn.WriteToUDP(outBuf.payload[:encrypted+uint64(protocol.HeaderSize)], session.PublicAddr)
-
-					log.Printf("Transmit: %v bytes to idx %v\n", encrypted+uint64(protocol.HeaderSize), peerIndex)
 				}()
 			}
 		}()

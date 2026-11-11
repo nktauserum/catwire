@@ -17,5 +17,9 @@ func ExtractIndex(ip uint32) (idx uint32, ok bool) {
 }
 
 func IsInternal(packet []byte) bool {
+	ip := ExtractDestinationIP(packet)
+	if ip&0x00FFFFFF == 0x0005000A && ip != 0x0105000A {
+		return true
+	}
 	return false
 }
