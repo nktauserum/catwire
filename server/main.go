@@ -19,13 +19,14 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-const ipAddr = "10.0.5.1"
-
 type server struct {
 	conn   *net.UDPConn
 	tunnel *tun.TUN
 	table  *routing.Table
 	cipher *crypto.Cipher
+
+	transmitPool *models.Pool[buffer]
+	transmitCh chan uint32
 }
 
 type buffer struct {
@@ -104,6 +105,7 @@ func (s *server) receive() {
 					s.conn.WriteToUDP(tx_buf[:], buf.incomingAddr)
 
 					log.Printf("Receive: Handshake from %v\n", buf.incomingAddr)
+					pool.Release(idx)
 
 				} else if header.Flags&protocol.F_DATA != 0 {
 					s_ptr := entry.Session.Load()
@@ -118,25 +120,34 @@ func (s *server) receive() {
 						continue
 					}
 
-					var outBuf buffer
+					outIdx := s.transmitPool.Acquire()
+					outBuf := s.transmitPool.Get(outIdx)
 					decrypted, e := session.Decrypt(outBuf.payload[:], buf.payload[:buf.size])
 					if e {
 						pool.Release(idx)
 						continue
 					}
 
-					s.tunnel.Write(outBuf.payload[:decrypted]) // TODO: add internal routing
-					entry.TransmitCounter.Add(1)
+					addr := buf.incomingAddr
 
-					if session.PublicAddr != buf.incomingAddr {
-						if old := *entry.Session.Load(); old.PublicAddr != buf.incomingAddr { // TODO: add replay check
-							old.PublicAddr = buf.incomingAddr
+					entry.TransmitCounter.Add(1)
+					pool.Release(idx)
+
+					if routing.IsInternal(outBuf.payload[:decrypted]) {
+						log.Println("Case internal routing")
+						s.transmitCh <- outIdx
+						continue
+					}
+
+					s.tunnel.Write(outBuf.payload[:decrypted])
+
+					if session.PublicAddr != addr {
+						if old := *entry.Session.Load(); old.PublicAddr != addr { // TODO: add replay check
+							old.PublicAddr = addr
 							s.table.Store(header.PeerIndex, &old)
 						}
 					}
 				}
-
-				pool.Release(idx)
 			}
 		}()
 	}
@@ -169,7 +180,18 @@ func (s *server) transmit() {
 
 	for range runtime.NumCPU() {
 		go func() {
-			for idx := range ch {
+			for {
+				var idx uint32
+				var ok bool
+				select {
+					case idx, ok = <-ch:
+					case idx, ok = <-s.transmitCh:
+				}
+				if !ok {
+					return				
+				}
+
+
 				buf := pool.Get(idx)
 				destIP := routing.ExtractDestinationIP(buf.payload[:])
 				peerIndex, ok := routing.ExtractIndex(destIP)
@@ -268,7 +290,7 @@ func main() {
 
 	cmds := [][]string{
 		{"ip", "link", "set", "cw0", "up"},
-		{"ip", "addr", "add", ipAddr + "/24", "dev", "cw0"},
+		{"ip", "addr", "add", routing.ServerAddr + "/24", "dev", "cw0"},
 		{"ip", "link", "set", "dev", "cw0", "mtu", "1420"},
 		{"iptables", "-t", "nat", "-A", "POSTROUTING", "-o", "eth0", "-j", "MASQUERADE"},
 		{"iptables", "-A", "FORWARD", "-i", "cw0", "-j", "ACCEPT"},
@@ -283,7 +305,10 @@ func main() {
 		}
 	}
 
-	s := server{conn, tunnel, table, cipher}
+	transmitPool := models.CreatePool[buffer]()
+	transmitCh := make(chan uint32, 1024)
+
+	s := server{conn, tunnel, table, cipher, transmitPool, transmitCh}
 
 	go s.receive()
 	go s.transmit()
