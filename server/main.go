@@ -213,6 +213,7 @@ func (s *server) transmit() {
 
 				s.conn.WriteToUDP(outBuf.payload[:encrypted+uint64(protocol.HeaderSize)], session.PublicAddr)
 
+				log.Printf("Transmit: %v bytes to idx %v\n", encrypted+uint64(protocol.HeaderSize), peerIndex)
 			}
 		}()
 	}

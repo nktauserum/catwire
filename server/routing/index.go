@@ -8,7 +8,7 @@ import (
 func IPAsInteger(addr net.IP) (uint32, bool) {
 	ipv4 := addr.To4()
 	if ipv4 != nil {
-		return binary.BigEndian.Uint32(ipv4), false
+		return binary.LittleEndian.Uint32(ipv4), false
 	}
 	return 0, true
 }
