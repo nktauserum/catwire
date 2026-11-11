@@ -26,12 +26,7 @@ func ExtractIndex(addr uint32) (uint32, bool) {
 
 func ExtractDestinationIP(packet []byte) uint32 {
 	ip := net.IP(packet[16:20])
-	return binary.BigEndian.Uint32(ip)
-}
-
-func ExtractSourceIP(packet []byte) uint32 {
-	ip := net.IP(packet[12:16])
-	return binary.BigEndian.Uint32(ip)
+	return binary.LittleEndian.Uint32(ip)
 }
 
 func getIPSubnet(ip uint32, mask uint32) uint32 {
