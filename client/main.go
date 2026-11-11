@@ -183,7 +183,7 @@ func (c *client) handshake() {
 
 func main() {
 	if len(os.Args) <= 1 {
-			log.Fatalln("pls provide a config")
+		log.Fatalln("pls provide a config")
 	}
 
 	e := crypto.Init()

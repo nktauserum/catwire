@@ -26,7 +26,7 @@ type server struct {
 	cipher *crypto.Cipher
 
 	transmitPool *models.Pool[buffer]
-	transmitCh chan uint32
+	transmitCh   chan uint32
 }
 
 type buffer struct {
@@ -184,13 +184,12 @@ func (s *server) transmit() {
 				var idx uint32
 				var ok bool
 				select {
-					case idx, ok = <-ch:
-					case idx, ok = <-s.transmitCh:
+				case idx, ok = <-ch:
+				case idx, ok = <-s.transmitCh:
 				}
 				if !ok {
-					return				
+					return
 				}
-
 
 				buf := pool.Get(idx)
 				destIP := routing.ExtractDestinationIP(buf.payload[:])

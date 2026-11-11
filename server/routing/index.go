@@ -7,6 +7,7 @@ import (
 
 const subnetMask = (0xFFFFFFFF << (32 - 24)) & 0xFFFFFFFF // 24 as CIDR notation (0xFFFFFF00)
 const ServerAddr = "10.0.5.1"
+
 var ServerAddrInt, _ = IPAsInteger(net.ParseIP(ServerAddr))
 var subnetAddr = getIPSubnet(ServerAddrInt, subnetMask)
 
@@ -19,7 +20,7 @@ func IPAsInteger(addr net.IP) (uint32, bool) {
 }
 
 func ExtractIndex(addr uint32) (uint32, bool) {
-	idx_base := addr >> 24
+	idx_base := (addr >> 24) & 0xFF
 	return idx_base - 2, idx_base >= 2
 }
 
