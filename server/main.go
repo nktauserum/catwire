@@ -134,7 +134,7 @@ func (s *server) receive() {
 					pool.Release(idx)
 
 					if routing.IsInternal(outBuf.payload[:decrypted]) {
-						log.Println("Case internal routing")
+						outBuf.size = int(decrypted)
 						s.transmitCh <- outIdx
 						continue
 					}
@@ -174,6 +174,43 @@ func (s *server) receive() {
 	}
 }
 
+func (s *server) handleTransmit(buf *buffer) {
+	destIP := routing.ExtractDestinationIP(buf.payload[:buf.size])
+	peerIndex, ok := routing.ExtractIndex(destIP)
+	if !ok {
+		return
+	}
+
+	entry := s.table.Lookup(peerIndex)
+	if entry == nil {
+		return
+	}
+
+	s_ptr := entry.Session.Load()
+	if s_ptr == nil {
+		return
+	}
+
+	session := *s_ptr
+	if !session.Active {
+		return
+	}
+
+	var outBuf buffer
+	binary.BigEndian.PutUint32(outBuf.payload[0:4], protocol.F_DATA)
+	binary.BigEndian.PutUint32(outBuf.payload[4:8], session.PeerIndex)
+	binary.BigEndian.PutUint64(outBuf.payload[8:16], entry.TransmitCounter.Add(1)-1)
+	crypto.RandomBytes(outBuf.payload[16:protocol.HeaderSize])
+
+	encrypted, e := session.Encrypt(outBuf.payload[:], buf.payload[:buf.size])
+	if e {
+		log.Println("Error encrypt the packet")
+		return
+	}
+
+	s.conn.WriteToUDP(outBuf.payload[:encrypted+uint64(protocol.HeaderSize)], session.PublicAddr)
+}
+
 func (s *server) transmit() {
 	pool := models.CreatePool[buffer]()
 	ch := make(chan uint32, 1024)
@@ -181,61 +218,24 @@ func (s *server) transmit() {
 	for range runtime.NumCPU() {
 		go func() {
 			for {
-				func() {
-
-					var buf *buffer
-					select {
-					case idx, ok := <-ch:
-						if !ok {
-							return
-						}
-
-						buf = pool.Get(idx)
-						defer pool.Release(idx)
-					case idx, ok := <-s.transmitCh:
-						if !ok {
-							return
-						}
-
-						buf = s.transmitPool.Get(idx)
-						defer s.transmitPool.Release(idx)
-					}
-
-					destIP := routing.ExtractDestinationIP(buf.payload[:buf.size])
-					peerIndex, ok := routing.ExtractIndex(destIP)
+				select {
+				case idx, ok := <-ch:
 					if !ok {
 						return
 					}
 
-					entry := s.table.Lookup(peerIndex)
-					if entry == nil {
+					buf := pool.Get(idx)
+					s.handleTransmit(buf)
+					pool.Release(idx)
+				case idx, ok := <-s.transmitCh:
+					if !ok {
 						return
 					}
 
-					s_ptr := entry.Session.Load()
-					if s_ptr == nil {
-						return
-					}
-
-					session := *s_ptr
-					if !session.Active {
-						return
-					}
-
-					var outBuf buffer
-					binary.BigEndian.PutUint32(outBuf.payload[0:4], protocol.F_DATA)
-					binary.BigEndian.PutUint32(outBuf.payload[4:8], session.PeerIndex)
-					binary.BigEndian.PutUint64(outBuf.payload[8:16], entry.TransmitCounter.Add(1)-1)
-					crypto.RandomBytes(outBuf.payload[16:protocol.HeaderSize])
-
-					encrypted, e := session.Encrypt(outBuf.payload[:], buf.payload[:buf.size])
-					if e {
-						log.Println("Error encrypt the packet")
-						return
-					}
-
-					s.conn.WriteToUDP(outBuf.payload[:encrypted+uint64(protocol.HeaderSize)], session.PublicAddr)
-				}()
+					buf := s.transmitPool.Get(idx)
+					s.handleTransmit(buf)
+					s.transmitPool.Release(idx)
+				}
 			}
 		}()
 	}
