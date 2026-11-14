@@ -14,6 +14,10 @@ func CreatePool[T any]() *Pool[T] {
 	return p
 }
 
+func (p *Pool[T]) Get(idx uint32) *T {
+	return &p.set[idx >> 16].data[idx & 0x0000FFFF]
+}
+
 func (p *Pool[T]) Acquire(hint uint32) uint32 {
 	h := hint%poolSetCapacity
 	idx := p.set[h].acquire()

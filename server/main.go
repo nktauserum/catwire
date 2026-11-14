@@ -39,7 +39,7 @@ func (s *server) receive() {
 	pool := models.CreatePool[buffer]()
 	ch := make(chan uint32, 1024)
 
-	for range runtime.NumCPU() {
+	for i := range runtime.NumCPU() {
 		go func() {
 			for idx := range ch {
 				buf := pool.Get(idx)
@@ -120,7 +120,7 @@ func (s *server) receive() {
 						continue
 					}
 
-					outIdx := s.transmitPool.Acquire()
+					outIdx := s.transmitPool.Acquire(uint32(i))
 					outBuf := s.transmitPool.Get(outIdx)
 					decrypted, e := session.Decrypt(outBuf.payload[:], buf.payload[:buf.size])
 					if e {
@@ -155,9 +155,12 @@ func (s *server) receive() {
 	log.Printf("Receive loop started: %v workers", runtime.NumCPU())
 
 	var err error
+	var hint uint32
 	for {
-		idx := pool.Acquire()
+		idx := pool.Acquire(hint)
 		buf := pool.Get(idx)
+
+		hint += 1
 
 		buf.size, buf.incomingAddr, err = s.conn.ReadFromUDP(buf.payload[:])
 		if err != nil {
@@ -243,9 +246,12 @@ func (s *server) transmit() {
 	log.Printf("Transmit loop started: %v workers", runtime.NumCPU())
 
 	var err error
+	var hint uint32
 	for {
-		idx := pool.Acquire()
+		idx := pool.Acquire(hint)
 		buf := pool.Get(idx)
+
+		hint += 1
 
 		buf.size, err = s.tunnel.Read(buf.payload[:])
 		if err != nil {
