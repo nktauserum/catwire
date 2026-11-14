@@ -26,10 +26,22 @@ type Queue[T any] struct {
 	_            [60]byte
 	closed       uint32
 	_            [60]byte
-	sendq, recvq sync.Cond
+	mtx 		sync.Mutex
+	sendq, recvq *sync.Cond
+}
+
+func CreateQueue[T any]() (*Queue[T]) {
+	q := new(Queue[T])
+	q.sendq = sync.NewCond(&q.mtx)
+	q.recvq = sync.NewCond(&q.mtx)
+
+	return q
 }
 
 func (q *Queue[T]) Send(item T) bool {
+	q.mtx.Lock()
+	defer q.mtx.Unlock()
+
 	for {
 		status := q.qwrite(item)
 		if status != Q_OK {
@@ -47,6 +59,9 @@ func (q *Queue[T]) Send(item T) bool {
 }
 
 func (q *Queue[T]) Receive() (T, bool) {
+	q.mtx.Lock()
+	defer q.mtx.Unlock()
+
 	for {
 		item, status := q.qread()
 		if status != Q_OK {
