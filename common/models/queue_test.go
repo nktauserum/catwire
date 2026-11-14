@@ -7,7 +7,7 @@ import (
 
 func TestQueue(t *testing.T) {
 	q := CreateQueue[uint64]()
-	const iterations = 5_000
+	const iterations = 5_000_000
 
 	var wg sync.WaitGroup
 	wg.Go(func() {

@@ -24,6 +24,7 @@ func runtime_Semrelease(s *uint32, handoff bool, skipframes int)
 type Queue[T any] struct {
 	queue [queueSize]T
 
+	_            [60]byte
 	head         uint32
 	_            [60]byte
 	tail         uint32
@@ -32,7 +33,9 @@ type Queue[T any] struct {
 	_            [60]byte
 	closed       uint32
 	_            [60]byte
-	sendq, recvq uint32
+	sendq uint32 
+	_            [60]byte
+	recvq uint32
 }
 
 func CreateQueue[T any]() *Queue[T] {
