@@ -1,9 +1,9 @@
 package models
 
 import (
-	"sync"
 	"sync/atomic"
 	"time"
+	_ "unsafe"
 )
 
 const queueSize = 256
@@ -15,65 +15,60 @@ const (
 	Q_ECLOSED
 )
 
+//go:linkname runtime_Semacquire sync.runtime_Semacquire
+func runtime_Semacquire(s *uint32)
+
+//go:linkname runtime_Semrelease sync.runtime_Semrelease
+func runtime_Semrelease(s *uint32, handoff bool, skipframes int)
+
 type Queue[T any] struct {
 	queue [queueSize]T
 
-	head         uint32
-	_            [60]byte
-	tail         uint32
-	_            [60]byte
-	tail_cache   uint32
-	_            [60]byte
-	closed       uint32
-	_            [60]byte
-	mtx 		sync.Mutex
-	sendq, recvq *sync.Cond
+	head       uint32
+	_          [60]byte
+	tail       uint32
+	_          [60]byte
+	tail_cache uint32
+	_          [60]byte
+	closed     uint32
+	_          [60]byte
+	sendq, recvq uint32
 }
 
-func CreateQueue[T any]() (*Queue[T]) {
+func CreateQueue[T any]() *Queue[T] {
 	q := new(Queue[T])
-	q.sendq = sync.NewCond(&q.mtx)
-	q.recvq = sync.NewCond(&q.mtx)
 
 	return q
 }
 
 func (q *Queue[T]) Send(item T) bool {
-	q.mtx.Lock()
-	defer q.mtx.Unlock()
-
 	for {
 		status := q.qwrite(item)
 		if status != Q_OK {
 			if status == Q_ECLOSED {
 				return false
 			}
-
-			q.sendq.Wait()
+			runtime_Semacquire(&q.sendq)
 			continue
 		}
 
-		q.recvq.Signal()
+		runtime_Semrelease(&q.recvq, false, 1)
 		return true
 	}
 }
 
 func (q *Queue[T]) Receive() (T, bool) {
-	q.mtx.Lock()
-	defer q.mtx.Unlock()
-
 	for {
 		item, status := q.qread()
 		if status != Q_OK {
 			if status == Q_ECLOSED {
 				return item, false
 			}
-
-			q.recvq.Wait()
+			runtime_Semacquire(&q.recvq)
 			continue
 		}
 
-		q.sendq.Signal()
+		runtime_Semrelease(&q.sendq, false, 1)
 		return item, true
 	}
 }
