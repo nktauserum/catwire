@@ -1,17 +1,67 @@
 package models
 
+import "sync/atomic"
+
 const queueSize = 256
 
-type Queue[T] struct {
+const (
+	Q_OK uint32 = iota
+	Q_ESIZE
+	Q_ECLOSED
+)
+
+type Queue[T any] struct {
 	queue [queueSize]T
-	head uint32
-	_ [60]byte
-	tail uint32
-	_ [60]byte
+
+	head       uint32
+	_          [60]byte
+	tail       uint32
+	_          [60]byte
 	tail_cache uint32
-	_ [60]byte
-	waiting uint32
+	_          [60]byte
+	waiting    uint32
+	_          [60]byte
+	closed     uint32
 }
+
+func (q *Queue[T]) Push(item T) bool { // `error` is too heavy
+	head := q.head // atomic.LoadUint32(&q.head)
+	if head - q.tail_cache == queueSize {
+		q.tail_cache = atomic.LoadUint32(&q.tail)
+
+		if head - q.tail_cache == queueSize {
+			if atomic.LoadUint32(&q.closed) == 1 {
+				return false
+			}
+			// wait and smth
+		}
+	}
+
+	q.queue[(head+1) % queueSize] = item
+
+	atomic.AddUint32(&q.head, 1)
+	return true
+}
+
+func (q *Queue[T]) Read() (T, bool) {
+	tail := q.tail
+	head := atomic.LoadUint32(&q.head)
+
+	if tail == head {
+		if atomic.LoadUint32(&q.closed) == 1 {
+			var empty T
+			return empty, false
+		}
+		// wait
+	}
+
+	item := q.queue[(tail+1) % queueSize]
+	atomic.AddUint32(&q.tail, 1)
+	return item, true
+}
+
+func (q *Queue[T]) wait() {}
+func (q *Queue[T]) wake() {}
 
 /*
 
@@ -28,7 +78,7 @@ int queue_write(Queue* q, cont_t* values, size_t size) {
 
     for (u32 i = 0; i < pending; ++i)
         q->queue[(head+i) % CW_QUEUE_SIZE] = values[i];
-    
+
     __atomic_store_n(&q->head, head + pending, __ATOMIC_RELEASE);
 
     return pending;
