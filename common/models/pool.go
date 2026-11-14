@@ -26,8 +26,8 @@ func (p *Pool[T]) Release(idx uint32) {
 }
 
 type internalPool[T any] struct {
-	bitmap uint64
 	data   [64]T
+	bitmap uint64
 }
 
 func createInternalPool[T any]() *internalPool[T] {
