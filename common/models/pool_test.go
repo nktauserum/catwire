@@ -11,10 +11,10 @@ func TestPoolConcurrent(t *testing.T) {
 
 	const iterations = 5_000
 	var wg sync.WaitGroup
-	for range 100 {
+	for i := range 100 {
 		wg.Go(func() {
 			for range iterations {
-				idx := p.Acquire()
+				idx := p.Acquire(uint32(i))
 				time.Sleep(time.Microsecond)
 				p.Release(idx)
 			}
@@ -28,8 +28,8 @@ func BenchmarkPool(b *testing.B) {
 	b.Run("serial", func(b *testing.B) {
 		p := CreatePool[uint64]()
 		b.ResetTimer()
-		for range b.N {
-			idx := p.Acquire()
+		for i := range b.N {
+			idx := p.Acquire(uint32(i))
 			p.Release(idx)
 		}
 	})
@@ -38,8 +38,10 @@ func BenchmarkPool(b *testing.B) {
 		p := CreatePool[uint64]()
 		b.ResetTimer()
 		b.RunParallel(func(pb *testing.PB) {
+			i := 0 
 			for pb.Next() {
-				idx := p.Acquire()
+				idx := p.Acquire(uint32(i))
+				i += 1
 				p.Release(idx)
 			}
 		})
