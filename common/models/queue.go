@@ -1,11 +1,16 @@
 package models
 
-import "sync/atomic"
+import (
+	"sync"
+	"sync/atomic"
+	"time"
+)
 
 const queueSize = 256
+const maxSpinTime = time.Millisecond
 
 const (
-	Q_OK uint32 = iota
+	Q_OK uint8 = iota
 	Q_ESIZE
 	Q_ECLOSED
 )
@@ -13,55 +18,86 @@ const (
 type Queue[T any] struct {
 	queue [queueSize]T
 
-	head       uint32
-	_          [60]byte
-	tail       uint32
-	_          [60]byte
-	tail_cache uint32
-	_          [60]byte
-	waiting    uint32
-	_          [60]byte
-	closed     uint32
+	head         uint32
+	_            [60]byte
+	tail         uint32
+	_            [60]byte
+	tail_cache   uint32
+	_            [60]byte
+	closed       uint32
+	_            [60]byte
+	sendq, recvq sync.Cond
 }
 
-func (q *Queue[T]) Push(item T) bool { // `error` is too heavy
-	head := q.head // atomic.LoadUint32(&q.head)
-	if head - q.tail_cache == queueSize {
-		q.tail_cache = atomic.LoadUint32(&q.tail)
-
-		if head - q.tail_cache == queueSize {
-			if atomic.LoadUint32(&q.closed) == 1 {
+func (q *Queue[T]) Send(item T) bool {
+	for {
+		status := q.qwrite(item)
+		if status != Q_OK {
+			if status == Q_ECLOSED {
 				return false
 			}
-			// wait and smth
+
+			q.sendq.Wait()
+			continue
 		}
+
+		q.recvq.Signal()
+		return true
 	}
-
-	q.queue[(head+1) % queueSize] = item
-
-	atomic.AddUint32(&q.head, 1)
-	return true
 }
 
-func (q *Queue[T]) Read() (T, bool) {
+func (q *Queue[T]) Receive() (T, bool) {
+	for {
+		item, status := q.qread()
+		if status != Q_OK {
+			if status == Q_ECLOSED {
+				return item, false
+			}
+
+			q.recvq.Wait()
+			continue
+		}
+
+		q.sendq.Signal()
+		return item, true
+	}
+}
+
+func (q *Queue[T]) qread() (T, uint8) { // `error` is too heavy, use "enum" of uint8
 	tail := q.tail
 	head := atomic.LoadUint32(&q.head)
 
 	if tail == head {
+		var empty T
 		if atomic.LoadUint32(&q.closed) == 1 {
-			var empty T
-			return empty, false
+			return empty, Q_ECLOSED
 		}
-		// wait
+		return empty, Q_ESIZE
 	}
 
-	item := q.queue[(tail+1) % queueSize]
+	item := q.queue[(tail+1)%queueSize]
 	atomic.AddUint32(&q.tail, 1)
-	return item, true
+	return item, Q_OK
 }
 
-func (q *Queue[T]) wait() {}
-func (q *Queue[T]) wake() {}
+func (q *Queue[T]) qwrite(item T) uint8 {
+	head := q.head // atomic.LoadUint32(&q.head)
+	if head-q.tail_cache == queueSize {
+		q.tail_cache = atomic.LoadUint32(&q.tail)
+
+		if head-q.tail_cache == queueSize {
+			if atomic.LoadUint32(&q.closed) == 1 {
+				return Q_ECLOSED
+			}
+			return Q_ESIZE
+		}
+	}
+
+	q.queue[(head+1)%queueSize] = item
+
+	atomic.AddUint32(&q.head, 1)
+	return Q_OK
+}
 
 /*
 
